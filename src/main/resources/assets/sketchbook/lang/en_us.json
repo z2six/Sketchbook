@@ -1,0 +1,7 @@
+{
+  "item.sketchbook.pencil": "Pencil",
+  "button.sketchbook.sketch": "Sketch",
+  "button.sketchbook.delete": "Delete Sketch",
+  "menu.sketchbook.sketch_page_must_be_empty": "Sketch (Page must be empty)",
+  "message.sketchbook.capture_success": "Sketch captured"
+}

@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.z2six.sketchbook.mixin",
+  "plugin": "net.z2six.sketchbook.mixin.SketchbookMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+  ],
+  "client": [
+    "client.BookEditScreenMixin",
+    "client.scholar.SpreadBookScreenAccessor",
+    "client.scholar.SpreadBookEditScreenMixin",
+    "client.scholar.LecternSpreadBookEditScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
