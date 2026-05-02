@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "S",
+    "C"
+  ],
+  "key": {
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "C": {
+      "item": "minecraft:orange_dye"
+    }
+  },
+  "result": {
+    "id": "sketchbook:orange_pencil",
+    "count": 1
+  }
+}

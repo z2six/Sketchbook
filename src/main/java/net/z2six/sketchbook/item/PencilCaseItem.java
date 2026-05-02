@@ -95,7 +95,7 @@ public final class PencilCaseItem extends Item {
 
         tooltipComponents.add(Component.translatable("item.sketchbook.pencil_case.contains").withStyle(ChatFormatting.GRAY));
         for (PencilColor color : contents.colors()) {
-            tooltipComponents.add(Component.literal(" - ").append(SketchbookItems.createPencilStack(color).getHoverName()).withStyle(ChatFormatting.GRAY));
+            tooltipComponents.add(Component.translatable("item.sketchbook.pencil_case.entry", SketchbookItems.createPencilStack(color).getHoverName()).withStyle(ChatFormatting.GRAY));
         }
     }
 

@@ -11,7 +11,10 @@ import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.SceneMemorySummary;
+import net.z2six.sketchbook.book.SceneMemoryTitles;
 import net.z2six.sketchbook.book.SketchColorMask;
+import net.z2six.sketchbook.client.ClientSceneMemoryCache;
 import net.z2six.sketchbook.client.ClientSketchCache;
 import net.z2six.sketchbook.client.ClientSketchRequestManager;
 import net.z2six.sketchbook.client.SketchBookScreenBridge;
@@ -20,6 +23,8 @@ import net.z2six.sketchbook.client.SketchContextMenu;
 import net.z2six.sketchbook.client.SketchPageRenderer;
 import net.z2six.sketchbook.network.BookSketchColorPayload;
 import net.z2six.sketchbook.network.BookSketchPayload;
+import net.z2six.sketchbook.network.RipSketchPagePayload;
+import net.z2six.sketchbook.network.UseSceneMemoryPayload;
 import net.z2six.sketchbook.item.PencilColor;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,6 +38,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.ArrayList;
 
 @Mixin(BookEditScreen.class)
 public abstract class BookEditScreenMixin extends Screen implements SketchBookScreenBridge {
@@ -48,6 +54,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     @Unique private final SketchContextMenu sketchbook$contextMenu = new SketchContextMenu();
     @Unique private int sketchbook$menuMouseX;
     @Unique private int sketchbook$menuMouseY;
+    @Unique private int sketchbook$menuPageIndex = -1;
 
     protected BookEditScreenMixin(Component title) {
         super(title);
@@ -65,6 +72,9 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
             if (sketch == null && BookSketches.hasSketch(this.book, this.currentPage)) {
                 ClientSketchRequestManager.request(this.sketchbook$getTarget(), this.currentPage);
             }
+        }
+        if (sketch == null && this.sketchbook$menuPageIndex == this.currentPage) {
+            sketch = this.sketchbook$hoveredMemoryPreview(mouseX, mouseY);
         }
         if (sketch != null) {
             SketchPageRenderer.render(graphics, this.sketchbook$pageLeft(), this.sketchbook$pageTop(), 114, 128, sketch);
@@ -160,6 +170,11 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     }
 
     @Override
+    public boolean sketchbook$handleContextScroll(double mouseX, double mouseY, double scrollY) {
+        return this.sketchbook$contextMenu.scroll(mouseX, mouseY, scrollY, this.font);
+    }
+
+    @Override
     public Screen sketchbook$asScreen() {
         return this;
     }
@@ -168,6 +183,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     private void sketchbook$openContextMenu(int mouseX, int mouseY) {
         this.sketchbook$menuMouseX = mouseX;
         this.sketchbook$menuMouseY = mouseY;
+        this.sketchbook$menuPageIndex = this.currentPage;
         this.sketchbook$contextMenu.open(this.sketchbook$buildContextEntries(this.currentPage), this.font, mouseX, mouseY, this.width, this.height);
     }
 
@@ -179,6 +195,10 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
                 SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.delete"), true, () -> {
                     this.sketchbook$removeSketch(pageIndex);
                     PacketDistributor.sendToServer(BookSketchPayload.remove(this.sketchbook$getTarget(), pageIndex));
+                }),
+                SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.rip_page"), true, () -> {
+                    this.sketchbook$removeSketch(pageIndex);
+                    PacketDistributor.sendToServer(new RipSketchPagePayload(this.sketchbook$getTarget(), pageIndex));
                 }),
                 SketchContextMenu.Entry.submenu(
                     Component.translatable("menu.sketchbook.color"),
@@ -192,21 +212,24 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
         Component label = canCapture
             ? Component.translatable("button.sketchbook.sketch")
             : Component.translatable("menu.sketchbook.sketch_page_must_be_empty");
-        return List.of(SketchContextMenu.Entry.action(label, canCapture, () -> SketchCaptureController.requestCapture(this, pageIndex)));
+        List<SceneMemorySummary> memories = ClientSceneMemoryCache.getMemories();
+        return List.of(
+            SketchContextMenu.Entry.action(label, canCapture, () -> SketchCaptureController.requestCapture(this, pageIndex)),
+            SketchContextMenu.Entry.submenu(Component.translatable("menu.sketchbook.memories"), !memories.isEmpty() && this.sketchbook$canCaptureSketch(pageIndex), this.sketchbook$buildMemoryEntries(pageIndex, memories))
+        );
     }
 
     @Unique
     private List<SketchContextMenu.Entry> sketchbook$buildColorEntries(int pageIndex, boolean sourceAvailable) {
         int availableColorMask = SketchbookItems.getAvailableColoredPencilMask(this.minecraft.player);
         int currentColorMask = this.sketchbook$getCurrentColorMask(pageIndex);
-        boolean allSelected = availableColorMask != 0 && currentColorMask == availableColorMask;
-        return List.of(
-            this.sketchbook$allColorEntry(pageIndex, sourceAvailable, availableColorMask, allSelected),
-            this.sketchbook$colorEntry(pageIndex, PencilColor.WHITE, "item.sketchbook.white_pencil", sourceAvailable, currentColorMask),
-            this.sketchbook$colorEntry(pageIndex, PencilColor.YELLOW, "item.sketchbook.yellow_pencil", sourceAvailable, currentColorMask),
-            this.sketchbook$colorEntry(pageIndex, PencilColor.CYAN, "item.sketchbook.cyan_pencil", sourceAvailable, currentColorMask),
-            this.sketchbook$colorEntry(pageIndex, PencilColor.MAGENTA, "item.sketchbook.magenta_pencil", sourceAvailable, currentColorMask)
-        );
+        boolean allSelected = availableColorMask != 0 && (currentColorMask & availableColorMask) == availableColorMask;
+        List<SketchContextMenu.Entry> entries = new ArrayList<>();
+        entries.add(this.sketchbook$allColorEntry(pageIndex, sourceAvailable, availableColorMask, allSelected));
+        for (PencilColor color : PencilColor.menuColors()) {
+            entries.add(this.sketchbook$colorEntry(pageIndex, color, sourceAvailable, currentColorMask));
+        }
+        return entries;
     }
 
     @Unique
@@ -220,13 +243,13 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     }
 
     @Unique
-    private SketchContextMenu.Entry sketchbook$colorEntry(int pageIndex, PencilColor color, String key, boolean sourceAvailable, int currentColorMask) {
+    private SketchContextMenu.Entry sketchbook$colorEntry(int pageIndex, PencilColor color, boolean sourceAvailable, int currentColorMask) {
         boolean selected = SketchColorMask.isSelected(currentColorMask, color);
         boolean available = SketchbookItems.hasRequiredPencils(this.minecraft.player, color.bit());
         boolean active = sourceAvailable && (available || selected);
         int updatedColorMask = SketchColorMask.withColor(currentColorMask, color, !selected);
         return SketchContextMenu.Entry.stickyAction(
-            this.sketchbook$checkedLabel(selected, Component.translatable(key)),
+            this.sketchbook$checkedLabel(selected, Component.translatable(color.translationKey())),
             active,
             () -> this.sketchbook$setColorMask(pageIndex, updatedColorMask)
         );
@@ -235,6 +258,13 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     @Unique
     private boolean sketchbook$hasColorSource(int pageIndex) {
         return BookSketches.getSketchReference(this.book, pageIndex).map(ClientSketchCache::hasSource).orElse(false);
+    }
+
+    @Unique
+    private List<SketchContextMenu.Entry> sketchbook$buildMemoryEntries(int pageIndex, List<SceneMemorySummary> memories) {
+        return memories.stream()
+            .map(memory -> SketchContextMenu.Entry.memoryAction(SceneMemoryTitles.component(memory.createdGameTime()), true, memory.memoryId(), () -> PacketDistributor.sendToServer(new UseSceneMemoryPayload(this.sketchbook$getTarget(), pageIndex, memory.memoryId()))))
+            .toList();
     }
 
     @Unique
@@ -257,7 +287,15 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
 
     @Unique
     private Component sketchbook$checkedLabel(boolean checked, Component label) {
-        return Component.literal(checked ? "[x] " : "[ ] ").append(label);
+        return Component.translatable(checked ? "menu.sketchbook.checked" : "menu.sketchbook.unchecked", label);
+    }
+
+    @Unique
+    private PageSketch sketchbook$hoveredMemoryPreview(int mouseX, int mouseY) {
+        return this.sketchbook$contextMenu.hoveredMemoryId(mouseX, mouseY, this.font)
+            .flatMap(ClientSceneMemoryCache::getMemory)
+            .map(SceneMemorySummary::previewSketch)
+            .orElse(null);
     }
 
     @Unique

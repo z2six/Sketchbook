@@ -24,5 +24,7 @@ public interface SketchBookScreenBridge {
 
     void sketchbook$removeSketch(int pageIndex);
 
+    boolean sketchbook$handleContextScroll(double mouseX, double mouseY, double scrollY);
+
     Screen sketchbook$asScreen();
 }

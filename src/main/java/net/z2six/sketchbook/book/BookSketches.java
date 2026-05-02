@@ -88,6 +88,18 @@ public final class BookSketches {
         return PAGE_MARKER.equals(pageText);
     }
 
+    public static String getPageText(ItemStack book, int pageIndex) {
+        WritableBookContent content = book.get(DataComponents.WRITABLE_BOOK_CONTENT);
+        if (content == null) {
+            return "";
+        }
+        List<String> pages = content.getPages(false).toList();
+        if (pageIndex < 0 || pageIndex >= pages.size()) {
+            return "";
+        }
+        return pages.get(pageIndex);
+    }
+
     private static void setPageMarker(List<String> pages, int pageIndex, boolean present) {
         if (pageIndex < 0 || pageIndex >= pages.size()) {
             return;

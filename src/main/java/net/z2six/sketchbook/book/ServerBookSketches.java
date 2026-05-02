@@ -51,6 +51,21 @@ public final class ServerBookSketches {
         return referenceId;
     }
 
+    public static Optional<UUID> ripOut(ServerPlayer player, BookSketchTarget target, int pageIndex) {
+        ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
+        if (!book.is(Items.WRITABLE_BOOK)) {
+            return Optional.empty();
+        }
+
+        ResolvedSketch resolved = resolve(player, target, pageIndex).orElse(null);
+        if (resolved == null) {
+            return Optional.empty();
+        }
+
+        BookSketches.removeSketch(book, pageIndex);
+        return Optional.of(resolved.referenceId());
+    }
+
     public static Optional<ResolvedSketch> recolor(ServerPlayer player, BookSketchTarget target, int pageIndex, int colorMask, SketchImageProcessor.SketchStyle style) {
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
         if (!book.is(Items.WRITABLE_BOOK)) {

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 public record PencilCaseContents(int mask) {
-    private static final int ALL_BITS = (1 << PencilColor.values().length) - 1;
+    private static final int ALL_BITS = java.util.Arrays.stream(PencilColor.values()).mapToInt(PencilColor::bit).reduce(0, (left, right) -> left | right);
 
     public static final PencilCaseContents EMPTY = new PencilCaseContents(0);
 

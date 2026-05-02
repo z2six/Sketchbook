@@ -1,6 +1,7 @@
 package net.z2six.sketchbook;
 
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -11,17 +12,34 @@ import net.z2six.sketchbook.compat.curios.CuriosCompat;
 import net.z2six.sketchbook.item.PencilCaseItem;
 import net.z2six.sketchbook.item.PencilColor;
 
+import java.util.EnumMap;
 import java.util.Optional;
+import java.util.UUID;
 
 public final class SketchbookItems {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(Registries.ITEM, Sketchbook.MODID);
 
-    public static final DeferredHolder<Item, Item> PENCIL = ITEMS.register("pencil", SketchbookItems::createPencilItem);
-    public static final DeferredHolder<Item, Item> WHITE_PENCIL = ITEMS.register("white_pencil", SketchbookItems::createPencilItem);
-    public static final DeferredHolder<Item, Item> YELLOW_PENCIL = ITEMS.register("yellow_pencil", SketchbookItems::createPencilItem);
-    public static final DeferredHolder<Item, Item> CYAN_PENCIL = ITEMS.register("cyan_pencil", SketchbookItems::createPencilItem);
-    public static final DeferredHolder<Item, Item> MAGENTA_PENCIL = ITEMS.register("magenta_pencil", SketchbookItems::createPencilItem);
+    private static final EnumMap<PencilColor, DeferredHolder<Item, Item>> PENCILS = new EnumMap<>(PencilColor.class);
+
+    public static final DeferredHolder<Item, Item> PENCIL = registerPencil(PencilColor.GRAPHITE);
+    public static final DeferredHolder<Item, Item> WHITE_PENCIL = registerPencil(PencilColor.WHITE);
+    public static final DeferredHolder<Item, Item> YELLOW_PENCIL = registerPencil(PencilColor.YELLOW);
+    public static final DeferredHolder<Item, Item> CYAN_PENCIL = registerPencil(PencilColor.CYAN);
+    public static final DeferredHolder<Item, Item> MAGENTA_PENCIL = registerPencil(PencilColor.MAGENTA);
+    public static final DeferredHolder<Item, Item> ORANGE_PENCIL = registerPencil(PencilColor.ORANGE);
+    public static final DeferredHolder<Item, Item> LIGHT_BLUE_PENCIL = registerPencil(PencilColor.LIGHT_BLUE);
+    public static final DeferredHolder<Item, Item> LIME_PENCIL = registerPencil(PencilColor.LIME);
+    public static final DeferredHolder<Item, Item> PINK_PENCIL = registerPencil(PencilColor.PINK);
+    public static final DeferredHolder<Item, Item> GRAY_PENCIL = registerPencil(PencilColor.GRAY);
+    public static final DeferredHolder<Item, Item> LIGHT_GRAY_PENCIL = registerPencil(PencilColor.LIGHT_GRAY);
+    public static final DeferredHolder<Item, Item> PURPLE_PENCIL = registerPencil(PencilColor.PURPLE);
+    public static final DeferredHolder<Item, Item> BLUE_PENCIL = registerPencil(PencilColor.BLUE);
+    public static final DeferredHolder<Item, Item> BROWN_PENCIL = registerPencil(PencilColor.BROWN);
+    public static final DeferredHolder<Item, Item> GREEN_PENCIL = registerPencil(PencilColor.GREEN);
+    public static final DeferredHolder<Item, Item> RED_PENCIL = registerPencil(PencilColor.RED);
+    public static final DeferredHolder<Item, Item> BLACK_PENCIL = registerPencil(PencilColor.BLACK);
     public static final DeferredHolder<Item, Item> PENCIL_CASE = ITEMS.register("pencil_case", () -> new PencilCaseItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, Item> TORN_SKETCH = ITEMS.register("torn_sketch", () -> new Item(new Item.Properties().stacksTo(1)));
 
     private SketchbookItems() {
     }
@@ -71,20 +89,11 @@ public final class SketchbookItems {
         if (stack.isEmpty()) {
             return Optional.empty();
         }
-        if (stack.is(PENCIL.get())) {
-            return Optional.of(PencilColor.GRAPHITE);
-        }
-        if (stack.is(WHITE_PENCIL.get())) {
-            return Optional.of(PencilColor.WHITE);
-        }
-        if (stack.is(YELLOW_PENCIL.get())) {
-            return Optional.of(PencilColor.YELLOW);
-        }
-        if (stack.is(CYAN_PENCIL.get())) {
-            return Optional.of(PencilColor.CYAN);
-        }
-        if (stack.is(MAGENTA_PENCIL.get())) {
-            return Optional.of(PencilColor.MAGENTA);
+
+        for (var entry : PENCILS.entrySet()) {
+            if (stack.is(entry.getValue().get())) {
+                return Optional.of(entry.getKey());
+            }
         }
         return Optional.empty();
     }
@@ -93,14 +102,39 @@ public final class SketchbookItems {
         return new ItemStack(getPencilItem(color));
     }
 
+    public static ItemStack createTornSketch(UUID referenceId) {
+        ItemStack stack = new ItemStack(TORN_SKETCH.get());
+        stack.set(Sketchbook.TORN_SKETCH_REFERENCE, referenceId);
+        return stack;
+    }
+
+    public static Optional<UUID> getTornSketchReference(ItemStack stack) {
+        if (!stack.is(TORN_SKETCH.get())) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(stack.get(Sketchbook.TORN_SKETCH_REFERENCE));
+    }
+
+    public static boolean isTornSketch(ItemStack stack) {
+        return stack.is(TORN_SKETCH.get()) && stack.has(Sketchbook.TORN_SKETCH_REFERENCE);
+    }
+
     public static Item getPencilItem(PencilColor color) {
-        return switch (color) {
-            case GRAPHITE -> PENCIL.get();
-            case WHITE -> WHITE_PENCIL.get();
-            case YELLOW -> YELLOW_PENCIL.get();
-            case CYAN -> CYAN_PENCIL.get();
-            case MAGENTA -> MAGENTA_PENCIL.get();
-        };
+        return PENCILS.get(color).get();
+    }
+
+    public static void acceptCreativeItems(CreativeModeTab.Output output) {
+        for (PencilColor color : PencilColor.values()) {
+            output.accept(getPencilItem(color));
+        }
+        output.accept(PENCIL_CASE.get());
+        output.accept(TORN_SKETCH.get());
+    }
+
+    private static DeferredHolder<Item, Item> registerPencil(PencilColor color) {
+        DeferredHolder<Item, Item> holder = ITEMS.register(color.itemId(), SketchbookItems::createPencilItem);
+        PENCILS.put(color, holder);
+        return holder;
     }
 
     private static Item createPencilItem() {

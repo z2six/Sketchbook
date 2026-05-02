@@ -94,7 +94,7 @@ public final class SketchCaptureController {
         pendingCapture = null;
     }
 
-    private static CapturedSketch createSketch(NativeImage image) {
+    static CapturedSketch createSketch(NativeImage image) {
         int width = PageSketch.MAX_WIDTH;
         int height = PageSketch.MAX_HEIGHT;
         float targetAspect = (float)width / height;

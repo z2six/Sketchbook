@@ -3,13 +3,13 @@
   "category": "misc",
   "pattern": [
     "S",
-    "D"
+    "C"
   ],
   "key": {
     "S": {
       "item": "minecraft:stick"
     },
-    "D": {
+    "C": {
       "item": "minecraft:cyan_dye"
     }
   },

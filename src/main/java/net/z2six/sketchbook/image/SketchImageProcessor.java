@@ -13,19 +13,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 public final class SketchImageProcessor {
-    private static final int WHITE_RED = 247;
-    private static final int WHITE_GREEN = 246;
-    private static final int WHITE_BLUE = 240;
-    private static final int YELLOW_RED = 200;
-    private static final int YELLOW_GREEN = 173;
-    private static final int YELLOW_BLUE = 77;
-    private static final int CYAN_RED = 81;
-    private static final int CYAN_GREEN = 157;
-    private static final int CYAN_BLUE = 177;
-    private static final int MAGENTA_RED = 182;
-    private static final int MAGENTA_GREEN = 86;
-    private static final int MAGENTA_BLUE = 145;
-
     private SketchImageProcessor() {
     }
 
@@ -54,52 +41,113 @@ public final class SketchImageProcessor {
             int sourceGreen = argb >> 8 & 0xFF;
             int sourceBlue = argb & 0xFF;
             float shade = (shades[index] & 0xFF) / 255.0F;
-            float toneFactor = 0.14F + 0.86F * shade;
 
-            int red;
-            int green;
-            int blue;
+            int paperRed = PageSketch.PAPER_RED;
+            int paperGreen = PageSketch.PAPER_GREEN;
+            int paperBlue = PageSketch.PAPER_BLUE;
+            int inkRed = PageSketch.INK_RED;
+            int inkGreen = PageSketch.INK_GREEN;
+            int inkBlue = PageSketch.INK_BLUE;
+
             if (colorMask == SketchColorMask.ALL) {
-                int tintedRed = lerp(PageSketch.PAPER_RED, sourceRed, 0.82F);
-                int tintedGreen = lerp(PageSketch.PAPER_GREEN, sourceGreen, 0.82F);
-                int tintedBlue = lerp(PageSketch.PAPER_BLUE, sourceBlue, 0.82F);
-                red = Math.round(tintedRed * toneFactor);
-                green = Math.round(tintedGreen * toneFactor);
-                blue = Math.round(tintedBlue * toneFactor);
+                float sourceSaturation = saturation(sourceRed, sourceGreen, sourceBlue);
+                int paperTintRed = lerp(PageSketch.PAPER_RED, sourceRed, 0.74F);
+                int paperTintGreen = lerp(PageSketch.PAPER_GREEN, sourceGreen, 0.74F);
+                int paperTintBlue = lerp(PageSketch.PAPER_BLUE, sourceBlue, 0.74F);
+                int inkTintRed = lerp(PageSketch.INK_RED, sourceRed, 0.24F + sourceSaturation * 0.14F);
+                int inkTintGreen = lerp(PageSketch.INK_GREEN, sourceGreen, 0.24F + sourceSaturation * 0.14F);
+                int inkTintBlue = lerp(PageSketch.INK_BLUE, sourceBlue, 0.24F + sourceSaturation * 0.14F);
+                paperRed = lerp(PageSketch.PAPER_RED, paperTintRed, 0.56F + sourceSaturation * 0.10F);
+                paperGreen = lerp(PageSketch.PAPER_GREEN, paperTintGreen, 0.56F + sourceSaturation * 0.10F);
+                paperBlue = lerp(PageSketch.PAPER_BLUE, paperTintBlue, 0.56F + sourceSaturation * 0.10F);
+                inkRed = lerp(PageSketch.INK_RED, inkTintRed, 0.70F);
+                inkGreen = lerp(PageSketch.INK_GREEN, inkTintGreen, 0.70F);
+                inkBlue = lerp(PageSketch.INK_BLUE, inkTintBlue, 0.70F);
+                shade = clamp01((float)Math.pow(shade, 1.14F));
             } else {
-                float totalPigment = 0.0F;
+                float totalChromaWeight = 0.0F;
+                float strongestChromaWeight = 0.0F;
                 float weightedRed = 0.0F;
                 float weightedGreen = 0.0F;
                 float weightedBlue = 0.0F;
 
                 for (PencilColor color : PencilColor.values()) {
-                    if (!SketchColorMask.isSelected(colorMask, color)) {
+                    if (!SketchColorMask.isSelected(colorMask, color) || !isChromatic(color)) {
                         continue;
                     }
 
-                    float pigment = pigmentAmount(color, sourceRed, sourceGreen, sourceBlue);
-                    if (pigment <= 0.0F) {
+                    float chromaWeight = pigmentAmount(color, sourceRed, sourceGreen, sourceBlue);
+                    if (chromaWeight <= 0.0F) {
                         continue;
                     }
 
-                    totalPigment += pigment;
-                    weightedRed += targetRed(color) * pigment;
-                    weightedGreen += targetGreen(color) * pigment;
-                    weightedBlue += targetBlue(color) * pigment;
+                    totalChromaWeight += chromaWeight;
+                    strongestChromaWeight = Math.max(strongestChromaWeight, chromaWeight);
+                    weightedRed += color.red() * chromaWeight;
+                    weightedGreen += color.green() * chromaWeight;
+                    weightedBlue += color.blue() * chromaWeight;
                 }
 
-                float strength = Mth.clamp(totalPigment / Math.max(1, Integer.bitCount(colorMask)), 0.0F, 1.0F);
-                int mixRed = totalPigment > 0.0F ? Math.round(weightedRed / totalPigment) : PageSketch.PAPER_RED;
-                int mixGreen = totalPigment > 0.0F ? Math.round(weightedGreen / totalPigment) : PageSketch.PAPER_GREEN;
-                int mixBlue = totalPigment > 0.0F ? Math.round(weightedBlue / totalPigment) : PageSketch.PAPER_BLUE;
-                int tintedRed = lerp(PageSketch.PAPER_RED, mixRed, strength * 0.92F);
-                int tintedGreen = lerp(PageSketch.PAPER_GREEN, mixGreen, strength * 0.92F);
-                int tintedBlue = lerp(PageSketch.PAPER_BLUE, mixBlue, strength * 0.92F);
-                red = Math.round(tintedRed * toneFactor);
-                green = Math.round(tintedGreen * toneFactor);
-                blue = Math.round(tintedBlue * toneFactor);
+                if (totalChromaWeight > 0.0F) {
+                    float chromaStrength = clamp01(strongestChromaWeight * 0.95F + totalChromaWeight * 0.30F);
+                    int mixRed = Math.round(weightedRed / totalChromaWeight);
+                    int mixGreen = Math.round(weightedGreen / totalChromaWeight);
+                    int mixBlue = Math.round(weightedBlue / totalChromaWeight);
+                    int sourceTintRed = lerp(mixRed, sourceRed, 0.45F);
+                    int sourceTintGreen = lerp(mixGreen, sourceGreen, 0.45F);
+                    int sourceTintBlue = lerp(mixBlue, sourceBlue, 0.45F);
+                    paperRed = lerp(PageSketch.PAPER_RED, sourceTintRed, chromaStrength * 0.82F);
+                    paperGreen = lerp(PageSketch.PAPER_GREEN, sourceTintGreen, chromaStrength * 0.82F);
+                    paperBlue = lerp(PageSketch.PAPER_BLUE, sourceTintBlue, chromaStrength * 0.82F);
+                    inkRed = lerp(PageSketch.INK_RED, sourceTintRed, chromaStrength * 0.40F);
+                    inkGreen = lerp(PageSketch.INK_GREEN, sourceTintGreen, chromaStrength * 0.40F);
+                    inkBlue = lerp(PageSketch.INK_BLUE, sourceTintBlue, chromaStrength * 0.40F);
+                }
+
+                float whiteAmount = SketchColorMask.isSelected(colorMask, PencilColor.WHITE) ? pigmentAmount(PencilColor.WHITE, sourceRed, sourceGreen, sourceBlue) : 0.0F;
+                if (whiteAmount > 0.0F) {
+                    paperRed = lerp(paperRed, PencilColor.WHITE.red(), whiteAmount * 0.92F);
+                    paperGreen = lerp(paperGreen, PencilColor.WHITE.green(), whiteAmount * 0.92F);
+                    paperBlue = lerp(paperBlue, PencilColor.WHITE.blue(), whiteAmount * 0.92F);
+                    inkRed = lerp(inkRed, PencilColor.LIGHT_GRAY.red(), whiteAmount * 0.18F);
+                    inkGreen = lerp(inkGreen, PencilColor.LIGHT_GRAY.green(), whiteAmount * 0.18F);
+                    inkBlue = lerp(inkBlue, PencilColor.LIGHT_GRAY.blue(), whiteAmount * 0.18F);
+                }
+
+                float lightGrayAmount = SketchColorMask.isSelected(colorMask, PencilColor.LIGHT_GRAY) ? pigmentAmount(PencilColor.LIGHT_GRAY, sourceRed, sourceGreen, sourceBlue) : 0.0F;
+                if (lightGrayAmount > 0.0F) {
+                    paperRed = lerp(paperRed, PencilColor.LIGHT_GRAY.red(), lightGrayAmount * 0.48F);
+                    paperGreen = lerp(paperGreen, PencilColor.LIGHT_GRAY.green(), lightGrayAmount * 0.48F);
+                    paperBlue = lerp(paperBlue, PencilColor.LIGHT_GRAY.blue(), lightGrayAmount * 0.48F);
+                    inkRed = lerp(inkRed, PencilColor.LIGHT_GRAY.red(), lightGrayAmount * 0.28F);
+                    inkGreen = lerp(inkGreen, PencilColor.LIGHT_GRAY.green(), lightGrayAmount * 0.28F);
+                    inkBlue = lerp(inkBlue, PencilColor.LIGHT_GRAY.blue(), lightGrayAmount * 0.28F);
+                }
+
+                float grayAmount = SketchColorMask.isSelected(colorMask, PencilColor.GRAY) ? pigmentAmount(PencilColor.GRAY, sourceRed, sourceGreen, sourceBlue) : 0.0F;
+                if (grayAmount > 0.0F) {
+                    paperRed = lerp(paperRed, PencilColor.GRAY.red(), grayAmount * 0.34F);
+                    paperGreen = lerp(paperGreen, PencilColor.GRAY.green(), grayAmount * 0.34F);
+                    paperBlue = lerp(paperBlue, PencilColor.GRAY.blue(), grayAmount * 0.34F);
+                    inkRed = lerp(inkRed, PencilColor.GRAY.red(), grayAmount * 0.55F);
+                    inkGreen = lerp(inkGreen, PencilColor.GRAY.green(), grayAmount * 0.55F);
+                    inkBlue = lerp(inkBlue, PencilColor.GRAY.blue(), grayAmount * 0.55F);
+                }
+
+                float blackAmount = SketchColorMask.isSelected(colorMask, PencilColor.BLACK) ? pigmentAmount(PencilColor.BLACK, sourceRed, sourceGreen, sourceBlue) : 0.0F;
+                if (blackAmount > 0.0F) {
+                    paperRed = lerp(paperRed, PencilColor.BLACK.red(), blackAmount * 0.08F);
+                    paperGreen = lerp(paperGreen, PencilColor.BLACK.green(), blackAmount * 0.08F);
+                    paperBlue = lerp(paperBlue, PencilColor.BLACK.blue(), blackAmount * 0.08F);
+                    inkRed = lerp(inkRed, PencilColor.BLACK.red(), blackAmount * 0.88F);
+                    inkGreen = lerp(inkGreen, PencilColor.BLACK.green(), blackAmount * 0.88F);
+                    inkBlue = lerp(inkBlue, PencilColor.BLACK.blue(), blackAmount * 0.88F);
+                }
             }
 
+            int red = lerp(inkRed, paperRed, shade);
+            int green = lerp(inkGreen, paperGreen, shade);
+            int blue = lerp(inkBlue, paperBlue, shade);
             pixels[index] = 0xFF000000 | Mth.clamp(red, 0, 255) << 16 | Mth.clamp(green, 0, 255) << 8 | Mth.clamp(blue, 0, 255);
         }
 
@@ -113,46 +161,69 @@ public final class SketchImageProcessor {
     }
 
     private static float pigmentAmount(PencilColor color, int sourceRed, int sourceGreen, int sourceBlue) {
+        float brightness = (sourceRed + sourceGreen + sourceBlue) / (255.0F * 3.0F);
+        float saturation = saturation(sourceRed, sourceGreen, sourceBlue);
+        float similarity = colorSimilarity(sourceRed, sourceGreen, sourceBlue, color.red(), color.green(), color.blue());
         return switch (color) {
             case WHITE -> {
-                float brightness = (sourceRed + sourceGreen + sourceBlue) / (255.0F * 3.0F);
-                yield Math.max(0.0F, (brightness - 0.55F) / 0.45F);
+                float highlight = smoothstep(0.60F, 1.0F, brightness);
+                float neutral = 1.0F - saturation;
+                yield emphasize(Math.max(highlight, similarity * 0.45F) * (0.55F + neutral * 0.45F), 2.0F);
             }
-            case YELLOW -> 1.0F - sourceBlue / 255.0F;
-            case CYAN -> 1.0F - sourceRed / 255.0F;
-            case MAGENTA -> 1.0F - sourceGreen / 255.0F;
-            default -> 0.0F;
+            case LIGHT_GRAY -> {
+                float neutral = 1.0F - saturation;
+                float tone = 1.0F - Math.min(1.0F, Math.abs(brightness - 0.74F) / 0.24F);
+                yield emphasize(Math.max(similarity * 0.55F, neutral * tone), 1.8F);
+            }
+            case GRAY -> {
+                float neutral = 1.0F - saturation;
+                float tone = 1.0F - Math.min(1.0F, Math.abs(brightness - 0.50F) / 0.28F);
+                yield emphasize(Math.max(similarity * 0.55F, neutral * tone), 1.8F);
+            }
+            case BLACK -> {
+                float darkness = smoothstep(0.18F, 0.78F, 1.0F - brightness);
+                yield emphasize(Math.max(similarity * 0.60F, darkness), 1.6F);
+            }
+            case GRAPHITE -> 0.0F;
+            default -> emphasize(similarity, 4.0F) * (0.25F + saturation * 0.75F);
         };
     }
 
-    private static int targetRed(PencilColor color) {
+    private static boolean isChromatic(PencilColor color) {
         return switch (color) {
-            case WHITE -> WHITE_RED;
-            case YELLOW -> YELLOW_RED;
-            case CYAN -> CYAN_RED;
-            case MAGENTA -> MAGENTA_RED;
-            default -> PageSketch.PAPER_RED;
+            case GRAPHITE, WHITE, LIGHT_GRAY, GRAY, BLACK -> false;
+            default -> true;
         };
     }
 
-    private static int targetGreen(PencilColor color) {
-        return switch (color) {
-            case WHITE -> WHITE_GREEN;
-            case YELLOW -> YELLOW_GREEN;
-            case CYAN -> CYAN_GREEN;
-            case MAGENTA -> MAGENTA_GREEN;
-            default -> PageSketch.PAPER_GREEN;
-        };
+    private static float emphasize(float amount, float exponent) {
+        return (float)Math.pow(clamp01(amount), exponent);
     }
 
-    private static int targetBlue(PencilColor color) {
-        return switch (color) {
-            case WHITE -> WHITE_BLUE;
-            case YELLOW -> YELLOW_BLUE;
-            case CYAN -> CYAN_BLUE;
-            case MAGENTA -> MAGENTA_BLUE;
-            default -> PageSketch.PAPER_BLUE;
-        };
+    private static float smoothstep(float edge0, float edge1, float value) {
+        float normalized = clamp01((value - edge0) / Math.max(0.0001F, edge1 - edge0));
+        return normalized * normalized * (3.0F - 2.0F * normalized);
+    }
+
+    private static float clamp01(float value) {
+        return Mth.clamp(value, 0.0F, 1.0F);
+    }
+
+    private static float colorSimilarity(int sourceRed, int sourceGreen, int sourceBlue, int targetRed, int targetGreen, int targetBlue) {
+        float redDelta = (sourceRed - targetRed) / 255.0F;
+        float greenDelta = (sourceGreen - targetGreen) / 255.0F;
+        float blueDelta = (sourceBlue - targetBlue) / 255.0F;
+        float distance = Mth.sqrt(redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta) / Mth.sqrt(3.0F);
+        return Math.max(0.0F, 1.0F - distance);
+    }
+
+    private static float saturation(int red, int green, int blue) {
+        int max = Math.max(red, Math.max(green, blue));
+        int min = Math.min(red, Math.min(green, blue));
+        if (max == 0) {
+            return 0.0F;
+        }
+        return (max - min) / (float)max;
     }
 
     private static int lerp(int start, int end, float amount) {
