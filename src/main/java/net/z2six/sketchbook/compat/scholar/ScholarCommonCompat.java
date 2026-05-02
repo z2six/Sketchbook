@@ -11,52 +11,64 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
-import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.CapturedSketch;
+import net.z2six.sketchbook.book.ServerBookSketches;
 import net.z2six.sketchbook.network.BookSketchSyncPayload;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public final class ScholarCommonCompat {
     private ScholarCommonCompat() {
     }
 
-    public static void handleSketchUpdate(ServerPlayer serverPlayer, BookSketchTarget target, int pageIndex, Optional<PageSketch> sketch) {
-        if (!ModList.get().isLoaded("scholar") || target.lecternPos().isEmpty()) {
-            return;
-        }
-
-        if (!SketchbookItems.hasPencil(serverPlayer)) {
-            return;
-        }
-
-        if (!(serverPlayer.containerMenu instanceof LecternSpreadMenu menu)) {
-            return;
-        }
-
-        BlockPos lecternPos = target.lecternPos().get();
-        if (!lecternPos.equals(menu.getLecternPos())) {
-            return;
-        }
-
-        if (!(serverPlayer.serverLevel().getBlockEntity(lecternPos) instanceof LecternBlockEntity lectern)) {
-            return;
-        }
-
-        ItemStack book = lectern.getBook();
+    public static void handleSketchUpdate(ServerPlayer serverPlayer, BookSketchTarget target, int pageIndex, Optional<CapturedSketch> sketch) {
+        ItemStack book = getLecternBook(serverPlayer, target);
         if (!book.is(Items.WRITABLE_BOOK)) {
             return;
         }
 
         if (sketch.isPresent()) {
-            BookSketches.applySketch(book, pageIndex, sketch.get());
+            UUID referenceId = ServerBookSketches.storeNewSketch(serverPlayer, sketch.get());
+            BookSketches.applyReference(book, pageIndex, referenceId);
+            broadcastLecternUpdate(
+                serverPlayer,
+                target,
+                new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(sketch.get().sketch()), true, 0)
+            );
         } else {
             BookSketches.removeSketch(book, pageIndex);
+            broadcastLecternUpdate(serverPlayer, target, BookSketchSyncPayload.remove(target, pageIndex));
+        }
+    }
+
+    public static ItemStack getLecternBook(ServerPlayer serverPlayer, BookSketchTarget target) {
+        if (!ModList.get().isLoaded("scholar") || target.lecternPos().isEmpty()) {
+            return ItemStack.EMPTY;
         }
 
-        lectern.setChanged();
-        serverPlayer.containerMenu.broadcastChanges();
+        if (!(serverPlayer.containerMenu instanceof LecternSpreadMenu menu)) {
+            return ItemStack.EMPTY;
+        }
 
-        BookSketchSyncPayload syncPayload = new BookSketchSyncPayload(target, pageIndex, sketch);
+        BlockPos lecternPos = target.lecternPos().get();
+        if (!lecternPos.equals(menu.getLecternPos())) {
+            return ItemStack.EMPTY;
+        }
+
+        if (!(serverPlayer.serverLevel().getBlockEntity(lecternPos) instanceof LecternBlockEntity lectern)) {
+            return ItemStack.EMPTY;
+        }
+
+        return lectern.getBook();
+    }
+
+    public static void broadcastLecternUpdate(ServerPlayer serverPlayer, BookSketchTarget target, BookSketchSyncPayload syncPayload) {
+        BlockPos lecternPos = target.lecternPos().orElseThrow();
+        if (serverPlayer.serverLevel().getBlockEntity(lecternPos) instanceof LecternBlockEntity lectern) {
+            lectern.setChanged();
+        }
+        serverPlayer.containerMenu.broadcastChanges();
         for (ServerPlayer otherPlayer : serverPlayer.serverLevel().players()) {
             if (otherPlayer.containerMenu instanceof LecternSpreadMenu otherMenu && lecternPos.equals(otherMenu.getLecternPos())) {
                 otherPlayer.containerMenu.broadcastChanges();

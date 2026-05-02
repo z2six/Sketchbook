@@ -8,6 +8,8 @@ import net.z2six.sketchbook.Sketchbook;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public final class BookSketches {
     public static final String PAGE_MARKER = " ";
@@ -15,9 +17,19 @@ public final class BookSketches {
     private BookSketches() {
     }
 
-    public static PageSketch getSketch(ItemStack book, int pageIndex) {
+    public static SketchPageEntry getEntry(ItemStack book, int pageIndex) {
         SketchBookData data = book.get(Sketchbook.BOOK_SKETCHES);
         return data == null ? null : data.get(pageIndex);
+    }
+
+    public static PageSketch getInlineSketch(ItemStack book, int pageIndex) {
+        SketchPageEntry entry = getEntry(book, pageIndex);
+        return entry == null ? null : entry.inlineSketch().orElse(null);
+    }
+
+    public static Optional<UUID> getSketchReference(ItemStack book, int pageIndex) {
+        SketchPageEntry entry = getEntry(book, pageIndex);
+        return entry == null ? Optional.empty() : entry.referenceId();
     }
 
     public static boolean hasSketch(ItemStack book, int pageIndex) {
@@ -25,9 +37,14 @@ public final class BookSketches {
         return data != null && data.hasSketch(pageIndex);
     }
 
-    public static void applySketch(ItemStack book, int pageIndex, PageSketch sketch) {
+    public static void applyLegacySketch(ItemStack book, int pageIndex, PageSketch sketch) {
         List<String> pages = getPages(book, pageIndex);
-        applySketch(book, pages, pageIndex, sketch);
+        applyLegacySketch(book, pages, pageIndex, sketch);
+    }
+
+    public static void applyReference(ItemStack book, int pageIndex, UUID referenceId) {
+        List<String> pages = getPages(book, pageIndex);
+        applyReference(book, pages, pageIndex, referenceId);
     }
 
     public static void removeSketch(ItemStack book, int pageIndex) {
@@ -35,10 +52,18 @@ public final class BookSketches {
         removeSketch(book, pages, pageIndex);
     }
 
-    public static void applySketch(ItemStack book, List<String> pages, int pageIndex, PageSketch sketch) {
+    public static void applyLegacySketch(ItemStack book, List<String> pages, int pageIndex, PageSketch sketch) {
+        applyEntry(book, pages, pageIndex, SketchPageEntry.legacy(sketch));
+    }
+
+    public static void applyReference(ItemStack book, List<String> pages, int pageIndex, UUID referenceId) {
+        applyEntry(book, pages, pageIndex, SketchPageEntry.reference(referenceId));
+    }
+
+    public static void applyEntry(ItemStack book, List<String> pages, int pageIndex, SketchPageEntry entry) {
         ensurePageCapacity(pages, pageIndex);
         SketchBookData data = book.getOrDefault(Sketchbook.BOOK_SKETCHES, SketchBookData.EMPTY);
-        book.set(Sketchbook.BOOK_SKETCHES, data.withSketch(pageIndex, sketch));
+        book.set(Sketchbook.BOOK_SKETCHES, data.withEntry(pageIndex, entry));
         setPageMarker(pages, pageIndex, true);
         writePages(book, pages);
     }
@@ -76,7 +101,6 @@ public final class BookSketches {
         } else if (isMarker(current)) {
             pages.set(pageIndex, "");
         }
-
     }
 
     private static List<String> getPages(ItemStack book, int targetPageIndex) {

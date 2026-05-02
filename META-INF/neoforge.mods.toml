@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="LGPL-3.0-or-later"
+issueTrackerURL="https://github.com/TheIllusiveC4/Curios/issues"
+logoFile="curios_icon.png"
+logoBlur=false
+[[mods]]
+    modId="curios"
+    version="9.5.1+1.21.1"
+    displayName="Curios API"
+    displayURL="https://github.com/TheIllusiveC4/Curios"
+    authors="C4"
+    description='''A flexible and expandable accessory/equipment API for users and developers.'''
+[[mixins]]
+    config = "curios.neoforge.mixins.json"
+[[mixins]]
+    config = "curios.mixins.json"
+[[dependencies.curios]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1.60,)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.curios]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21, 1.22)"
+    ordering="NONE"
+    side="BOTH"
+[modproperties.curios]
+    catalogueImageIcon="curios_icon.png"

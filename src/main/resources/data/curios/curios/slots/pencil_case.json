@@ -1,0 +1,8 @@
+{
+  "order": 220,
+  "size": 1,
+  "icon": "sketchbook:slot/pencil_case_curios",
+  "validators": [
+    "curios:tag"
+  ]
+}

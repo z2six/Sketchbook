@@ -1,18 +1,23 @@
 package net.z2six.sketchbook;
 
+import com.mojang.serialization.Codec;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.InterModEnqueueEvent;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.z2six.sketchbook.book.SketchBookData;
+import net.z2six.sketchbook.compat.curios.CuriosCompat;
 import net.z2six.sketchbook.network.BookSketchPayload;
+import net.z2six.sketchbook.network.BookSketchColorPayload;
+import net.z2six.sketchbook.network.BookSketchRequestPayload;
 import net.z2six.sketchbook.network.BookSketchSyncPayload;
 
 @Mod(Sketchbook.MODID)
@@ -22,7 +27,11 @@ public class Sketchbook {
     public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, MODID);
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<SketchBookData>> BOOK_SKETCHES = DATA_COMPONENTS.registerComponentType(
         "book_sketches",
-        builder -> builder.persistent(SketchBookData.CODEC).networkSynchronized(ByteBufCodecs.fromCodecWithRegistries(SketchBookData.CODEC)).cacheEncoding()
+        builder -> builder.persistent(SketchBookData.CODEC).networkSynchronized(ByteBufCodecs.fromCodecWithRegistries(SketchBookData.NETWORK_CODEC)).cacheEncoding()
+    );
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Integer>> PENCIL_CASE_CONTENTS = DATA_COMPONENTS.registerComponentType(
+        "pencil_case_contents",
+        builder -> builder.persistent(Codec.INT).networkSynchronized(ByteBufCodecs.VAR_INT).cacheEncoding()
     );
 
     public Sketchbook(IEventBus modEventBus) {
@@ -30,17 +39,29 @@ public class Sketchbook {
         SketchbookItems.ITEMS.register(modEventBus);
         modEventBus.addListener(this::registerPayloads);
         modEventBus.addListener(this::buildCreativeTabs);
+        modEventBus.addListener(this::enqueueImc);
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
         registrar.playToServer(BookSketchPayload.TYPE, BookSketchPayload.STREAM_CODEC, BookSketchPayload::handle);
+        registrar.playToServer(BookSketchColorPayload.TYPE, BookSketchColorPayload.STREAM_CODEC, BookSketchColorPayload::handle);
+        registrar.playToServer(BookSketchRequestPayload.TYPE, BookSketchRequestPayload.STREAM_CODEC, BookSketchRequestPayload::handle);
         registrar.playToClient(BookSketchSyncPayload.TYPE, BookSketchSyncPayload.STREAM_CODEC, BookSketchSyncPayload::handle);
     }
 
     private void buildCreativeTabs(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(SketchbookItems.PENCIL.get());
+            event.accept(SketchbookItems.WHITE_PENCIL.get());
+            event.accept(SketchbookItems.YELLOW_PENCIL.get());
+            event.accept(SketchbookItems.CYAN_PENCIL.get());
+            event.accept(SketchbookItems.MAGENTA_PENCIL.get());
+            event.accept(SketchbookItems.PENCIL_CASE.get());
         }
+    }
+
+    private void enqueueImc(InterModEnqueueEvent event) {
+        CuriosCompat.enqueueImc();
     }
 }

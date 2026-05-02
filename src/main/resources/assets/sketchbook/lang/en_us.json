@@ -1,7 +1,16 @@
 {
   "item.sketchbook.pencil": "Pencil",
+  "item.sketchbook.white_pencil": "White Pencil",
+  "item.sketchbook.yellow_pencil": "Yellow Pencil",
+  "item.sketchbook.cyan_pencil": "Cyan Pencil",
+  "item.sketchbook.magenta_pencil": "Magenta Pencil",
+  "item.sketchbook.pencil_case": "Pencil Case",
+  "item.sketchbook.pencil_case.empty": "Empty",
+  "item.sketchbook.pencil_case.contains": "Contains:",
   "button.sketchbook.sketch": "Sketch",
   "button.sketchbook.delete": "Delete Sketch",
+  "menu.sketchbook.color": "Colour",
+  "menu.sketchbook.color_all": "All",
   "menu.sketchbook.sketch_page_must_be_empty": "Sketch (Page must be empty)",
   "message.sketchbook.capture_success": "Sketch captured"
 }

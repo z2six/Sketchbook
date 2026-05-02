@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "L L",
+    "LPL",
+    "LLL"
+  ],
+  "key": {
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "P": {
+      "item": "sketchbook:pencil"
+    }
+  },
+  "result": {
+    "id": "sketchbook:pencil_case",
+    "count": 1
+  }
+}

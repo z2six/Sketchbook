@@ -16,21 +16,23 @@ import net.z2six.sketchbook.Sketchbook;
 import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
-import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.CapturedSketch;
+import net.z2six.sketchbook.book.ServerBookSketches;
 import net.z2six.sketchbook.compat.scholar.ScholarCommonCompat;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional<PageSketch> sketch) implements CustomPacketPayload {
+public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional<CapturedSketch> sketch) implements CustomPacketPayload {
     private static final Codec<BookSketchPayload> CODEC = RecordCodecBuilder.create(instance -> instance.group(
         BookSketchTarget.CODEC.fieldOf("target").forGetter(BookSketchPayload::target),
         Codec.intRange(0, 99).fieldOf("page_index").forGetter(BookSketchPayload::pageIndex),
-        PageSketch.CODEC.optionalFieldOf("sketch").forGetter(BookSketchPayload::sketch)
+        CapturedSketch.CODEC.optionalFieldOf("sketch").forGetter(BookSketchPayload::sketch)
     ).apply(instance, BookSketchPayload::new));
     public static final Type<BookSketchPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(Sketchbook.MODID, "book_sketch"));
     public static final StreamCodec<RegistryFriendlyByteBuf, BookSketchPayload> STREAM_CODEC = ByteBufCodecs.fromCodecWithRegistries(CODEC);
 
-    public BookSketchPayload(BookSketchTarget target, int pageIndex, PageSketch sketch) {
+    public BookSketchPayload(BookSketchTarget target, int pageIndex, CapturedSketch sketch) {
         this(target, pageIndex, Optional.of(sketch));
     }
 
@@ -49,7 +51,7 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
                 return;
             }
 
-            if (!SketchbookItems.hasPencil(serverPlayer)) {
+            if (payload.sketch().isPresent() && !SketchbookItems.hasPencil(serverPlayer)) {
                 return;
             }
 
@@ -63,18 +65,21 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
                 return;
             }
 
-            applySketch(book, payload.pageIndex(), payload.sketch());
-            serverPlayer.inventoryMenu.broadcastChanges();
-            serverPlayer.containerMenu.broadcastChanges();
-            PacketDistributor.sendToPlayer(serverPlayer, new BookSketchSyncPayload(payload.target(), payload.pageIndex(), payload.sketch()));
+            if (payload.sketch().isPresent()) {
+                UUID referenceId = ServerBookSketches.storeNewSketch(serverPlayer, payload.sketch().get());
+                BookSketches.applyReference(book, payload.pageIndex(), referenceId);
+                serverPlayer.inventoryMenu.broadcastChanges();
+                serverPlayer.containerMenu.broadcastChanges();
+                PacketDistributor.sendToPlayer(
+                    serverPlayer,
+                    new BookSketchSyncPayload(payload.target(), payload.pageIndex(), Optional.of(referenceId), Optional.of(payload.sketch().get().sketch()), true, 0)
+                );
+            } else {
+                BookSketches.removeSketch(book, payload.pageIndex());
+                serverPlayer.inventoryMenu.broadcastChanges();
+                serverPlayer.containerMenu.broadcastChanges();
+                PacketDistributor.sendToPlayer(serverPlayer, BookSketchSyncPayload.remove(payload.target(), payload.pageIndex()));
+            }
         });
-    }
-
-    private static void applySketch(ItemStack book, int pageIndex, Optional<PageSketch> sketch) {
-        if (sketch.isPresent()) {
-            BookSketches.applySketch(book, pageIndex, sketch.get());
-        } else {
-            BookSketches.removeSketch(book, pageIndex);
-        }
     }
 }

@@ -4,9 +4,7 @@ import io.github.mortuusars.scholar.client.gui.screen.edit.SpreadBookEditScreen;
 import io.github.mortuusars.scholar.client.gui.widget.textbox.TextBox;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -14,10 +12,16 @@ import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.SketchColorMask;
+import net.z2six.sketchbook.client.ClientSketchCache;
+import net.z2six.sketchbook.client.ClientSketchRequestManager;
 import net.z2six.sketchbook.client.SketchBookScreenBridge;
 import net.z2six.sketchbook.client.SketchCaptureController;
+import net.z2six.sketchbook.client.SketchContextMenu;
 import net.z2six.sketchbook.client.SketchPageRenderer;
+import net.z2six.sketchbook.network.BookSketchColorPayload;
 import net.z2six.sketchbook.network.BookSketchPayload;
+import net.z2six.sketchbook.item.PencilColor;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,6 +33,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
+import java.util.UUID;
 
 @Mixin(value = SpreadBookEditScreen.class, remap = false)
 public abstract class SpreadBookEditScreenMixin extends Screen implements SketchBookScreenBridge {
@@ -42,13 +47,9 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
     @Shadow protected abstract void updateButtonVisibility();
     @Shadow protected abstract void setTextBoxes();
 
-    @Unique private int sketchbook$contextPageIndex = -1;
-    @Unique private int sketchbook$contextLeft;
-    @Unique private int sketchbook$contextTop;
-    @Unique private int sketchbook$contextWidth;
-    @Unique private boolean sketchbook$contextDelete;
-    @Unique private boolean sketchbook$contextActive;
-    @Unique private Component sketchbook$contextLabel = CommonComponents.EMPTY;
+    @Unique private final SketchContextMenu sketchbook$contextMenu = new SketchContextMenu();
+    @Unique private int sketchbook$menuMouseX;
+    @Unique private int sketchbook$menuMouseY;
 
     protected SpreadBookEditScreenMixin(Component title) {
         super(title);
@@ -61,7 +62,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Inject(method = "setTextBoxes()V", at = @At("TAIL"))
     private void sketchbook$setTextBoxes(CallbackInfo ci) {
-        this.sketchbook$clearContextMenu();
+        this.sketchbook$contextMenu.clear();
         this.sketchbook$updateSketchUi();
     }
 
@@ -72,30 +73,32 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void sketchbook$mouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
-        if (this.sketchbook$contextMenuVisible()) {
-            if (this.sketchbook$isInsideContextMenu(mouseX, mouseY)) {
+        if (this.sketchbook$contextMenu.isVisible()) {
+            if (this.sketchbook$contextMenu.contains(mouseX, mouseY, this.font, this.width)) {
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT || button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-                    if (this.sketchbook$contextActive) {
-                        this.sketchbook$handlePageAction(this.sketchbook$contextPageIndex);
-                    }
-                    this.sketchbook$clearContextMenu();
+                    this.sketchbook$contextMenu.click(mouseX, mouseY, this.font, this.width);
                     cir.setReturnValue(true);
                 }
                 return;
             }
-
-            this.sketchbook$clearContextMenu();
+            this.sketchbook$contextMenu.clear();
         }
 
-        if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT || !SketchbookItems.hasPencil(this.minecraft.player)) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             return;
         }
 
         int pageIndex = this.sketchbook$getPageAt(mouseX, mouseY);
-        if (pageIndex >= 0) {
-            this.sketchbook$openContextMenu(pageIndex, (int)Math.round(mouseX), (int)Math.round(mouseY));
-            cir.setReturnValue(true);
+        if (pageIndex < 0) {
+            return;
         }
+
+        if (!this.sketchbook$hasSketch(pageIndex) && !SketchbookItems.hasPencil(this.minecraft.player)) {
+            return;
+        }
+
+        this.sketchbook$openContextMenu(pageIndex, (int)Math.round(mouseX), (int)Math.round(mouseY));
+        cir.setReturnValue(true);
     }
 
     @Inject(method = "render", at = @At("TAIL"))
@@ -103,7 +106,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         SpreadBookScreenAccessor spread = (SpreadBookScreenAccessor)this;
         this.sketchbook$renderPageSketch(graphics, this.sketchbook$getLeftPageIndex(), spread.sketchbook$getLeftPos() + 22, spread.sketchbook$getTopPos() + 21);
         this.sketchbook$renderPageSketch(graphics, this.sketchbook$getRightPageIndex(), spread.sketchbook$getLeftPos() + 159, spread.sketchbook$getTopPos() + 21);
-        this.sketchbook$renderContextMenu(graphics);
+        this.sketchbook$contextMenu.render(graphics, this.font, mouseX, mouseY, this.width);
     }
 
     @Override
@@ -124,11 +127,30 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Override
     public void sketchbook$applySketch(int pageIndex, PageSketch sketch) {
-        BookSketches.applySketch(this.bookStack, this.pages, pageIndex, sketch);
+        BookSketches.applyLegacySketch(this.bookStack, this.pages, pageIndex, sketch);
         this.bookModified = true;
         this.setTextBoxes();
         this.updateButtonVisibility();
         this.sketchbook$updateSketchUi();
+    }
+
+    @Override
+    public void sketchbook$setSketchReference(int pageIndex, UUID referenceId) {
+        BookSketches.applyReference(this.bookStack, this.pages, pageIndex, referenceId);
+        this.bookModified = true;
+        this.setTextBoxes();
+        this.updateButtonVisibility();
+        this.sketchbook$updateSketchUi();
+    }
+
+    @Override
+    public java.util.Optional<UUID> sketchbook$getSketchReference(int pageIndex) {
+        return BookSketches.getSketchReference(this.bookStack, pageIndex);
+    }
+
+    @Override
+    public void sketchbook$cacheSketch(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask) {
+        ClientSketchCache.put(referenceId, sketch, sourceAvailable, colorMask);
     }
 
     @Override
@@ -146,13 +168,10 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
     }
 
     @Unique
-    private void sketchbook$handlePageAction(int pageIndex) {
-        if (this.sketchbook$hasSketch(pageIndex)) {
-            this.sketchbook$removeSketch(pageIndex);
-            PacketDistributor.sendToServer(BookSketchPayload.remove(this.sketchbook$getTarget(), pageIndex));
-        } else if (this.sketchbook$canCaptureSketch(pageIndex)) {
-            SketchCaptureController.requestCapture(this, pageIndex);
-        }
+    private void sketchbook$openContextMenu(int pageIndex, int mouseX, int mouseY) {
+        this.sketchbook$menuMouseX = mouseX;
+        this.sketchbook$menuMouseY = mouseY;
+        this.sketchbook$contextMenu.open(this.sketchbook$buildContextEntries(pageIndex), this.font, mouseX, mouseY, this.width, this.height);
     }
 
     @Unique
@@ -184,7 +203,13 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Unique
     private void sketchbook$renderPageSketch(GuiGraphics graphics, int pageIndex, int left, int top) {
-        PageSketch sketch = BookSketches.getSketch(this.bookStack, pageIndex);
+        PageSketch sketch = BookSketches.getInlineSketch(this.bookStack, pageIndex);
+        if (sketch == null) {
+            sketch = BookSketches.getSketchReference(this.bookStack, pageIndex).flatMap(ClientSketchCache::get).orElse(null);
+            if (sketch == null && BookSketches.hasSketch(this.bookStack, pageIndex)) {
+                ClientSketchRequestManager.request(this.sketchbook$getTarget(), pageIndex);
+            }
+        }
         if (sketch != null) {
             SketchPageRenderer.render(graphics, left, top, 114, 128, sketch);
         }
@@ -205,59 +230,91 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
     }
 
     @Unique
-    private void sketchbook$openContextMenu(int pageIndex, int mouseX, int mouseY) {
-        boolean hasSketch = this.sketchbook$hasSketch(pageIndex);
-        this.sketchbook$contextPageIndex = pageIndex;
-        this.sketchbook$contextDelete = hasSketch;
-        this.sketchbook$contextActive = hasSketch || this.sketchbook$canCaptureSketch(pageIndex);
-        this.sketchbook$contextLabel = this.sketchbook$contextDelete
-            ? Component.translatable("button.sketchbook.delete")
-            : this.sketchbook$contextActive
-                ? Component.translatable("button.sketchbook.sketch")
-                : Component.translatable("menu.sketchbook.sketch_page_must_be_empty");
-        this.sketchbook$contextWidth = this.font.width(this.sketchbook$contextLabel) + 12;
-        this.sketchbook$contextLeft = Mth.clamp(mouseX, 4, this.width - this.sketchbook$contextWidth - 4);
-        this.sketchbook$contextTop = Mth.clamp(mouseY, 4, this.height - 22);
+    private List<SketchContextMenu.Entry> sketchbook$buildContextEntries(int pageIndex) {
+        if (this.sketchbook$hasSketch(pageIndex)) {
+            boolean sourceAvailable = this.sketchbook$hasColorSource(pageIndex);
+            return List.of(
+                SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.delete"), true, () -> {
+                    this.sketchbook$removeSketch(pageIndex);
+                    PacketDistributor.sendToServer(BookSketchPayload.remove(this.sketchbook$getTarget(), pageIndex));
+                }),
+                SketchContextMenu.Entry.submenu(
+                    Component.translatable("menu.sketchbook.color"),
+                    sourceAvailable,
+                    this.sketchbook$buildColorEntries(pageIndex, sourceAvailable)
+                )
+            );
+        }
+
+        boolean canCapture = SketchbookItems.hasPencil(this.minecraft.player) && this.sketchbook$canCaptureSketch(pageIndex);
+        Component label = canCapture
+            ? Component.translatable("button.sketchbook.sketch")
+            : Component.translatable("menu.sketchbook.sketch_page_must_be_empty");
+        return List.of(SketchContextMenu.Entry.action(label, canCapture, () -> SketchCaptureController.requestCapture(this, pageIndex)));
     }
 
     @Unique
-    private void sketchbook$clearContextMenu() {
-        this.sketchbook$contextPageIndex = -1;
-        this.sketchbook$contextLabel = CommonComponents.EMPTY;
+    private List<SketchContextMenu.Entry> sketchbook$buildColorEntries(int pageIndex, boolean sourceAvailable) {
+        int availableColorMask = SketchbookItems.getAvailableColoredPencilMask(this.minecraft.player);
+        int currentColorMask = this.sketchbook$getCurrentColorMask(pageIndex);
+        boolean allSelected = availableColorMask != 0 && currentColorMask == availableColorMask;
+        return List.of(
+            this.sketchbook$allColorEntry(pageIndex, sourceAvailable, availableColorMask, allSelected),
+            this.sketchbook$colorEntry(pageIndex, PencilColor.WHITE, "item.sketchbook.white_pencil", sourceAvailable, currentColorMask),
+            this.sketchbook$colorEntry(pageIndex, PencilColor.YELLOW, "item.sketchbook.yellow_pencil", sourceAvailable, currentColorMask),
+            this.sketchbook$colorEntry(pageIndex, PencilColor.CYAN, "item.sketchbook.cyan_pencil", sourceAvailable, currentColorMask),
+            this.sketchbook$colorEntry(pageIndex, PencilColor.MAGENTA, "item.sketchbook.magenta_pencil", sourceAvailable, currentColorMask)
+        );
     }
 
     @Unique
-    private boolean sketchbook$contextMenuVisible() {
-        return this.sketchbook$contextPageIndex >= 0;
+    private SketchContextMenu.Entry sketchbook$allColorEntry(int pageIndex, boolean sourceAvailable, int availableColorMask, boolean allSelected) {
+        int updatedColorMask = allSelected ? SketchColorMask.NONE : availableColorMask;
+        return SketchContextMenu.Entry.stickyAction(
+            this.sketchbook$checkedLabel(allSelected, Component.translatable("menu.sketchbook.color_all")),
+            sourceAvailable && availableColorMask != 0,
+            () -> this.sketchbook$setColorMask(pageIndex, updatedColorMask)
+        );
     }
 
     @Unique
-    private boolean sketchbook$isInsideContextMenu(double mouseX, double mouseY) {
-        return this.sketchbook$contextMenuVisible()
-            && mouseX >= this.sketchbook$contextLeft
-            && mouseX < this.sketchbook$contextLeft + this.sketchbook$contextWidth
-            && mouseY >= this.sketchbook$contextTop
-            && mouseY < this.sketchbook$contextTop + 18;
+    private SketchContextMenu.Entry sketchbook$colorEntry(int pageIndex, PencilColor color, String key, boolean sourceAvailable, int currentColorMask) {
+        boolean selected = SketchColorMask.isSelected(currentColorMask, color);
+        boolean available = SketchbookItems.hasRequiredPencils(this.minecraft.player, color.bit());
+        boolean active = sourceAvailable && (available || selected);
+        int updatedColorMask = SketchColorMask.withColor(currentColorMask, color, !selected);
+        return SketchContextMenu.Entry.stickyAction(
+            this.sketchbook$checkedLabel(selected, Component.translatable(key)),
+            active,
+            () -> this.sketchbook$setColorMask(pageIndex, updatedColorMask)
+        );
     }
 
     @Unique
-    private void sketchbook$renderContextMenu(GuiGraphics graphics) {
-        if (!this.sketchbook$contextMenuVisible()) {
+    private boolean sketchbook$hasColorSource(int pageIndex) {
+        return BookSketches.getSketchReference(this.bookStack, pageIndex).map(ClientSketchCache::hasSource).orElse(false);
+    }
+
+    @Unique
+    private int sketchbook$getCurrentColorMask(int pageIndex) {
+        return BookSketches.getSketchReference(this.bookStack, pageIndex).map(ClientSketchCache::getColorMask).orElse(SketchColorMask.NONE);
+    }
+
+    @Unique
+    private void sketchbook$setColorMask(int pageIndex, int colorMask) {
+        UUID referenceId = BookSketches.getSketchReference(this.bookStack, pageIndex).orElse(null);
+        if (referenceId == null) {
             return;
         }
 
-        graphics.pose().pushPose();
-        graphics.pose().translate(0.0F, 0.0F, 400.0F);
-        graphics.fill(this.sketchbook$contextLeft, this.sketchbook$contextTop, this.sketchbook$contextLeft + this.sketchbook$contextWidth, this.sketchbook$contextTop + 18, 0xF4F0E6CF);
-        graphics.renderOutline(this.sketchbook$contextLeft, this.sketchbook$contextTop, this.sketchbook$contextWidth, 18, 0x7F302718);
-        graphics.drawString(
-            this.font,
-            this.sketchbook$contextLabel,
-            this.sketchbook$contextLeft + 6,
-            this.sketchbook$contextTop + 5,
-            this.sketchbook$contextActive ? 0x3A342E : 0x7A756D,
-            false
-        );
-        graphics.pose().popPose();
+        int normalizedColorMask = SketchColorMask.normalize(colorMask);
+        ClientSketchCache.updateColorMask(referenceId, normalizedColorMask);
+        PacketDistributor.sendToServer(new BookSketchColorPayload(this.sketchbook$getTarget(), pageIndex, normalizedColorMask));
+        this.sketchbook$contextMenu.refresh(this.sketchbook$buildContextEntries(pageIndex), this.font, this.width, this.height);
+    }
+
+    @Unique
+    private Component sketchbook$checkedLabel(boolean checked, Component label) {
+        return Component.literal(checked ? "[x] " : "[ ] ").append(label);
     }
 }

@@ -42,7 +42,6 @@ neoForge {
 
         server {
             server()
-            programArgument '--nogui'
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
@@ -96,6 +95,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 
 dependencies {
+    compileOnly files('run/mods/curios-neoforge-9.5.1+1.21.1.jar')
     compileOnly files('run/mods/scholar-neoforge-1.21.1-1.1.13.jar')
 
     // Example mod dependency with JEI

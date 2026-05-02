@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Specification-Title: Curios API
+Specification-Vendor: C4
+Specification-Version: 9.5.1+1.21.1
+Implementation-Title: neoforge
+Implementation-Version: 9.5.1+1.21.1
+Implementation-Vendor: C4
+Built-On-Minecraft: 1.21.1
+
