@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "sketchbook:item/torn_sketch_canvas"
+    "layer0": "sketchbook:item/torn_sketch"
   }
 }
