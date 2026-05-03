@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.book.StoredSketchData;
 import net.z2six.sketchbook.book.SketchStorageSavedData;
 
@@ -38,12 +39,19 @@ public record SketchReferenceRequestPayload(UUID referenceId) implements CustomP
 
             StoredSketchData stored = SketchStorageSavedData.get(serverPlayer.getServer()).getData(payload.referenceId()).orElse(null);
             if (stored == null) {
+                SketchbookLog.infoOnce(
+                    "missing-torn-sketch-storage:" + payload.referenceId(),
+                    "Sketchbook could not sync torn sketch ref {} to player {} in {} because the stored sketch data was missing.",
+                    payload.referenceId(),
+                    serverPlayer.getGameProfile().getName(),
+                    serverPlayer.serverLevel().dimension().location()
+                );
                 return;
             }
 
             PacketDistributor.sendToPlayer(
                 serverPlayer,
-                new SketchReferenceSyncPayload(payload.referenceId(), stored.sketch(), stored.hasSourceImage(), stored.colorMask())
+                new SketchReferenceSyncPayload(payload.referenceId(), stored.sketch(), stored.sourceImage(), stored.colorMask())
             );
         });
     }

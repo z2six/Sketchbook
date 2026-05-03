@@ -45,7 +45,7 @@ public record BookSketchRequestPayload(BookSketchTarget target, int pageIndex) i
                         payload.pageIndex(),
                         java.util.Optional.of(resolved.referenceId()),
                         java.util.Optional.of(resolved.sketch()),
-                        resolved.sourceAvailable(),
+                        resolved.sourceImage(),
                         resolved.colorMask()
                     )
                 );

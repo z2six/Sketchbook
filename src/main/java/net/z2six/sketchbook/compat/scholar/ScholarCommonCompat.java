@@ -22,24 +22,29 @@ public final class ScholarCommonCompat {
     private ScholarCommonCompat() {
     }
 
-    public static void handleSketchUpdate(ServerPlayer serverPlayer, BookSketchTarget target, int pageIndex, Optional<CapturedSketch> sketch) {
+    public static boolean handleSketchUpdate(ServerPlayer serverPlayer, BookSketchTarget target, int pageIndex, Optional<CapturedSketch> sketch) {
         ItemStack book = getLecternBook(serverPlayer, target);
         if (!book.is(Items.WRITABLE_BOOK)) {
-            return;
+            return false;
         }
 
         if (sketch.isPresent()) {
+            String pageText = BookSketches.getPageText(book, pageIndex);
+            if (BookSketches.hasSketch(book, pageIndex) || !BookSketches.canSketchOnText(pageText)) {
+                return false;
+            }
             UUID referenceId = ServerBookSketches.storeNewSketch(serverPlayer, sketch.get());
             BookSketches.applyReference(book, pageIndex, referenceId);
             broadcastLecternUpdate(
                 serverPlayer,
                 target,
-                new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(sketch.get().sketch()), true, 0)
+                new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(sketch.get().sketch()), Optional.of(sketch.get().sourceImage()), 0)
             );
         } else {
             BookSketches.removeSketch(book, pageIndex);
             broadcastLecternUpdate(serverPlayer, target, BookSketchSyncPayload.remove(target, pageIndex));
         }
+        return true;
     }
 
     public static ItemStack getLecternBook(ServerPlayer serverPlayer, BookSketchTarget target) {

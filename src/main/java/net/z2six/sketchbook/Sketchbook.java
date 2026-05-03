@@ -28,6 +28,7 @@ import net.z2six.sketchbook.network.RememberScenePayload;
 import net.z2six.sketchbook.network.RipSketchPagePayload;
 import net.z2six.sketchbook.network.SceneMemoryListRequestPayload;
 import net.z2six.sketchbook.network.SceneMemoryListSyncPayload;
+import net.z2six.sketchbook.network.SketchActionFeedbackPayload;
 import net.z2six.sketchbook.network.SketchReferenceRequestPayload;
 import net.z2six.sketchbook.network.SketchReferenceSyncPayload;
 import net.z2six.sketchbook.network.UseSceneMemoryPayload;
@@ -84,6 +85,7 @@ public class Sketchbook {
         registrar.playToServer(UseSceneMemoryPayload.TYPE, UseSceneMemoryPayload.STREAM_CODEC, UseSceneMemoryPayload::handle);
         registrar.playToClient(BookSketchSyncPayload.TYPE, BookSketchSyncPayload.STREAM_CODEC, BookSketchSyncPayload::handle);
         registrar.playToClient(SceneMemoryListSyncPayload.TYPE, SceneMemoryListSyncPayload.STREAM_CODEC, SceneMemoryListSyncPayload::handle);
+        registrar.playToClient(SketchActionFeedbackPayload.TYPE, SketchActionFeedbackPayload.STREAM_CODEC, SketchActionFeedbackPayload::handle);
         registrar.playToClient(SketchReferenceSyncPayload.TYPE, SketchReferenceSyncPayload.STREAM_CODEC, SketchReferenceSyncPayload::handle);
     }
 

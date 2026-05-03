@@ -4,6 +4,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.compat.scholar.ScholarCommonCompat;
 import net.z2six.sketchbook.network.BookSketchSyncPayload;
@@ -34,6 +35,13 @@ public final class ServerSceneMemories {
 
         Optional<SceneMemory> memory = SceneMemorySavedData.get(player.getServer()).getMemory(player.getUUID(), memoryId, player.serverLevel().getGameTime());
         if (memory.isEmpty()) {
+            SketchbookLog.infoOnce(
+                "missing-memory:" + player.getUUID() + ":" + memoryId,
+                "Sketchbook could not apply memory {} for player {} in {} because that memory no longer existed.",
+                memoryId,
+                player.getGameProfile().getName(),
+                player.serverLevel().dimension().location()
+            );
             return Optional.empty();
         }
 
@@ -52,7 +60,7 @@ public final class ServerSceneMemories {
         SketchStorageSavedData.get(player.getServer()).put(referenceId, storedSketch);
         BookSketches.applyReference(book, pageIndex, referenceId);
 
-        BookSketchSyncPayload payload = new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(storedSketch.sketch()), storedSketch.hasSourceImage(), storedSketch.colorMask());
+        BookSketchSyncPayload payload = new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(storedSketch.sketch()), storedSketch.sourceImage(), storedSketch.colorMask());
         if (target.isLectern()) {
             ScholarCommonCompat.broadcastLecternUpdate(player, target, payload);
         } else {

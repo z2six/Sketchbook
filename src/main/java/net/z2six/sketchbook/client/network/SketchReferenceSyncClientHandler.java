@@ -9,7 +9,7 @@ public final class SketchReferenceSyncClientHandler {
     }
 
     public static void handle(SketchReferenceSyncPayload payload) {
-        ClientSketchCache.put(payload.referenceId(), payload.sketch(), payload.sourceAvailable(), payload.colorMask());
+        ClientSketchCache.put(payload.referenceId(), payload.sketch(), payload.sourceImage(), payload.colorMask());
         ClientSketchReferenceRequestManager.clear(payload.referenceId());
     }
 }

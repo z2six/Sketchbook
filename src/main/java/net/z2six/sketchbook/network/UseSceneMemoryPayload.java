@@ -9,6 +9,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
 import net.z2six.sketchbook.book.BookSketchTarget;
@@ -33,7 +34,9 @@ public record UseSceneMemoryPayload(BookSketchTarget target, int pageIndex, UUID
     public static void handle(UseSceneMemoryPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer serverPlayer) {
-                ServerSceneMemories.applyMemoryToBook(serverPlayer, payload.target(), payload.pageIndex(), payload.memoryId());
+                if (ServerSceneMemories.applyMemoryToBook(serverPlayer, payload.target(), payload.pageIndex(), payload.memoryId()).isEmpty()) {
+                    PacketDistributor.sendToPlayer(serverPlayer, new SketchActionFeedbackPayload("message.sketchbook.memory_apply_failed"));
+                }
             }
         });
     }

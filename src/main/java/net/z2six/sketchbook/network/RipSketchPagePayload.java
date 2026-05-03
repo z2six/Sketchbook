@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
@@ -40,8 +41,17 @@ public record RipSketchPagePayload(BookSketchTarget target, int pageIndex) imple
                 return;
             }
 
+            if (!payload.target().isLectern()) {
+                ItemStack book = serverPlayer.getItemInHand(payload.target().hand());
+                if (!book.is(Items.WRITABLE_BOOK)) {
+                    fail(serverPlayer, "message.sketchbook.rip_failed_book_missing");
+                    return;
+                }
+            }
+
             Optional<UUID> referenceId = ServerBookSketches.ripOut(serverPlayer, payload.target(), payload.pageIndex());
             if (referenceId.isEmpty()) {
+                fail(serverPlayer, "message.sketchbook.rip_failed_missing_sketch");
                 return;
             }
 
@@ -58,5 +68,9 @@ public record RipSketchPagePayload(BookSketchTarget target, int pageIndex) imple
                 PacketDistributor.sendToPlayer(serverPlayer, BookSketchSyncPayload.remove(payload.target(), payload.pageIndex()));
             }
         });
+    }
+
+    private static void fail(ServerPlayer player, String translationKey) {
+        PacketDistributor.sendToPlayer(player, new SketchActionFeedbackPayload(translationKey));
     }
 }

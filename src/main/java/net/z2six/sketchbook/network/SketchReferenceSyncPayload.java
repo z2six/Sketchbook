@@ -12,15 +12,17 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
 import net.z2six.sketchbook.book.PageSketch;
 import net.z2six.sketchbook.book.SketchColorMask;
+import net.z2six.sketchbook.book.SketchSourceImage;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.Optional;
 import java.util.UUID;
 
-public record SketchReferenceSyncPayload(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask) implements CustomPacketPayload {
+public record SketchReferenceSyncPayload(UUID referenceId, PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask) implements CustomPacketPayload {
     private static final Codec<SketchReferenceSyncPayload> CODEC = RecordCodecBuilder.create(instance -> instance.group(
         UUIDUtil.STRING_CODEC.fieldOf("reference_id").forGetter(SketchReferenceSyncPayload::referenceId),
         PageSketch.NETWORK_CODEC.fieldOf("sketch").forGetter(SketchReferenceSyncPayload::sketch),
-        Codec.BOOL.optionalFieldOf("source_available", false).forGetter(SketchReferenceSyncPayload::sourceAvailable),
+        SketchSourceImage.CODEC.optionalFieldOf("source").forGetter(SketchReferenceSyncPayload::sourceImage),
         SketchColorMask.CODEC.optionalFieldOf("color_mask", SketchColorMask.NONE).forGetter(SketchReferenceSyncPayload::colorMask)
     ).apply(instance, SketchReferenceSyncPayload::new));
 

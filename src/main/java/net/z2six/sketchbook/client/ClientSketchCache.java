@@ -1,6 +1,7 @@
 package net.z2six.sketchbook.client;
 
 import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.SketchSourceImage;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,12 +18,16 @@ public final class ClientSketchCache {
         return Optional.ofNullable(CACHE.get(referenceId)).map(CachedSketch::sketch);
     }
 
-    public static void put(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask) {
-        CACHE.put(referenceId, new CachedSketch(sketch, sourceAvailable, colorMask));
+    public static void put(UUID referenceId, PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask) {
+        CACHE.put(referenceId, new CachedSketch(sketch, sourceImage == null ? Optional.empty() : sourceImage, colorMask));
     }
 
     public static boolean hasSource(UUID referenceId) {
-        return Optional.ofNullable(CACHE.get(referenceId)).map(CachedSketch::sourceAvailable).orElse(false);
+        return Optional.ofNullable(CACHE.get(referenceId)).flatMap(CachedSketch::sourceImage).isPresent();
+    }
+
+    public static Optional<SketchSourceImage> getSourceImage(UUID referenceId) {
+        return Optional.ofNullable(CACHE.get(referenceId)).flatMap(CachedSketch::sourceImage);
     }
 
     public static int getColorMask(UUID referenceId) {
@@ -32,7 +37,7 @@ public final class ClientSketchCache {
     public static void updateColorMask(UUID referenceId, int colorMask) {
         CachedSketch cachedSketch = CACHE.get(referenceId);
         if (cachedSketch != null) {
-            CACHE.put(referenceId, new CachedSketch(cachedSketch.sketch(), cachedSketch.sourceAvailable(), colorMask));
+            CACHE.put(referenceId, new CachedSketch(cachedSketch.sketch(), cachedSketch.sourceImage(), colorMask));
         }
     }
 
@@ -40,6 +45,6 @@ public final class ClientSketchCache {
         CACHE.remove(referenceId);
     }
 
-    private record CachedSketch(PageSketch sketch, boolean sourceAvailable, int colorMask) {
+    private record CachedSketch(PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask) {
     }
 }

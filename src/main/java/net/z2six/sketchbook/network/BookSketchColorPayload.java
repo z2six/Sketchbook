@@ -8,11 +8,14 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
 import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
+import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.SketchColorMask;
 import net.z2six.sketchbook.book.ServerBookSketches;
 import net.z2six.sketchbook.compat.scholar.ScholarCommonCompat;
@@ -38,16 +41,35 @@ public record BookSketchColorPayload(BookSketchTarget target, int pageIndex, int
                 return;
             }
 
+            if (!payload.target().isLectern()) {
+                ItemStack book = serverPlayer.getItemInHand(payload.target().hand());
+                if (!book.is(Items.WRITABLE_BOOK)) {
+                    fail(serverPlayer, "message.sketchbook.color_failed_book_missing");
+                    return;
+                }
+
+                if (BookSketches.getSketchReference(book, payload.pageIndex()).isEmpty()) {
+                    fail(serverPlayer, "message.sketchbook.color_failed_missing_sketch");
+                    return;
+                }
+            }
+
             int appliedColorMask = SketchColorMask.normalize(payload.colorMask()) & SketchbookItems.getAvailableColoredPencilMask(serverPlayer);
 
-            ServerBookSketches.recolor(serverPlayer, payload.target(), payload.pageIndex(), appliedColorMask, SketchImageProcessor.SketchStyle.V1).ifPresent(resolved -> {
+            var resolved = ServerBookSketches.recolor(serverPlayer, payload.target(), payload.pageIndex(), appliedColorMask, SketchImageProcessor.SketchStyle.V1);
+            if (resolved.isEmpty()) {
+                fail(serverPlayer, "message.sketchbook.color_failed_unavailable");
+                return;
+            }
+
+            resolved.ifPresent(resolvedSketch -> {
                 BookSketchSyncPayload syncPayload = new BookSketchSyncPayload(
                     payload.target(),
                     payload.pageIndex(),
-                    java.util.Optional.of(resolved.referenceId()),
-                    java.util.Optional.of(resolved.sketch()),
-                    resolved.sourceAvailable(),
-                    resolved.colorMask()
+                    java.util.Optional.of(resolvedSketch.referenceId()),
+                    java.util.Optional.of(resolvedSketch.sketch()),
+                    resolvedSketch.sourceImage(),
+                    resolvedSketch.colorMask()
                 );
                 if (payload.target().isLectern()) {
                     ScholarCommonCompat.broadcastLecternUpdate(serverPlayer, payload.target(), syncPayload);
@@ -58,5 +80,9 @@ public record BookSketchColorPayload(BookSketchTarget target, int pageIndex, int
                 }
             });
         });
+    }
+
+    private static void fail(ServerPlayer player, String translationKey) {
+        PacketDistributor.sendToPlayer(player, new SketchActionFeedbackPayload(translationKey));
     }
 }

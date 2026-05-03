@@ -14,7 +14,7 @@ public final class BookSketchSyncClientHandler {
     }
 
     public static void handle(BookSketchSyncPayload payload) {
-        payload.sketchId().ifPresent(referenceId -> payload.sketch().ifPresent(sketch -> ClientSketchCache.put(referenceId, sketch, payload.sourceAvailable(), payload.colorMask())));
+        payload.sketchId().ifPresent(referenceId -> payload.sketch().ifPresent(sketch -> ClientSketchCache.put(referenceId, sketch, payload.sourceImage(), payload.colorMask())));
         ClientSketchRequestManager.clear(payload.target(), payload.pageIndex());
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -23,7 +23,7 @@ public final class BookSketchSyncClientHandler {
                 if (!bridge.sketchbook$getSketchReference(payload.pageIndex()).filter(payload.sketchId().get()::equals).isPresent()) {
                     bridge.sketchbook$setSketchReference(payload.pageIndex(), payload.sketchId().get());
                 }
-                payload.sketch().ifPresent(sketch -> bridge.sketchbook$cacheSketch(payload.sketchId().get(), sketch, payload.sourceAvailable(), payload.colorMask()));
+                payload.sketch().ifPresent(sketch -> bridge.sketchbook$cacheSketch(payload.sketchId().get(), sketch, payload.sourceImage(), payload.colorMask()));
             } else {
                 bridge.sketchbook$removeSketch(payload.pageIndex());
             }

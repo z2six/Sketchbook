@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -88,9 +87,7 @@ public final class SketchCaptureController {
             minecraft.options.hideGui = pendingCapture.wasHideGui;
         }
 
-        bridge.sketchbook$applySketch(pendingCapture.pageIndex, sketch.sketch());
         PacketDistributor.sendToServer(new BookSketchPayload(pendingCapture.target, pendingCapture.pageIndex, sketch));
-        minecraft.player.displayClientMessage(Component.translatable("message.sketchbook.capture_success"), true);
         pendingCapture = null;
     }
 

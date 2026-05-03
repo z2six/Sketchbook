@@ -52,27 +52,37 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
             }
 
             if (payload.sketch().isPresent() && !SketchbookItems.hasPencil(serverPlayer)) {
+                fail(serverPlayer, "message.sketchbook.sketch_failed_no_pencil");
                 return;
             }
 
             if (payload.target().isLectern()) {
-                ScholarCommonCompat.handleSketchUpdate(serverPlayer, payload.target(), payload.pageIndex(), payload.sketch());
+                if (!ScholarCommonCompat.handleSketchUpdate(serverPlayer, payload.target(), payload.pageIndex(), payload.sketch())) {
+                    fail(serverPlayer, payload.sketch().isPresent() ? "message.sketchbook.sketch_failed_page_unavailable" : "message.sketchbook.sketch_failed_book_missing");
+                }
                 return;
             }
 
             ItemStack book = serverPlayer.getItemInHand(payload.target().hand());
             if (!book.is(Items.WRITABLE_BOOK)) {
+                fail(serverPlayer, "message.sketchbook.sketch_failed_book_missing");
                 return;
             }
 
             if (payload.sketch().isPresent()) {
+                String pageText = BookSketches.getPageText(book, payload.pageIndex());
+                if (BookSketches.hasSketch(book, payload.pageIndex()) || !BookSketches.canSketchOnText(pageText)) {
+                    fail(serverPlayer, "message.sketchbook.sketch_failed_page_unavailable");
+                    return;
+                }
+
                 UUID referenceId = ServerBookSketches.storeNewSketch(serverPlayer, payload.sketch().get());
                 BookSketches.applyReference(book, payload.pageIndex(), referenceId);
                 serverPlayer.inventoryMenu.broadcastChanges();
                 serverPlayer.containerMenu.broadcastChanges();
                 PacketDistributor.sendToPlayer(
                     serverPlayer,
-                    new BookSketchSyncPayload(payload.target(), payload.pageIndex(), Optional.of(referenceId), Optional.of(payload.sketch().get().sketch()), true, 0)
+                    new BookSketchSyncPayload(payload.target(), payload.pageIndex(), Optional.of(referenceId), Optional.of(payload.sketch().get().sketch()), Optional.of(payload.sketch().get().sourceImage()), 0)
                 );
             } else {
                 BookSketches.removeSketch(book, payload.pageIndex());
@@ -81,5 +91,9 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
                 PacketDistributor.sendToPlayer(serverPlayer, BookSketchSyncPayload.remove(payload.target(), payload.pageIndex()));
             }
         });
+    }
+
+    private static void fail(ServerPlayer player, String translationKey) {
+        PacketDistributor.sendToPlayer(player, new SketchActionFeedbackPayload(translationKey));
     }
 }

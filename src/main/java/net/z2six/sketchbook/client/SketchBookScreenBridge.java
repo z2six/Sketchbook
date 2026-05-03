@@ -3,6 +3,7 @@ package net.z2six.sketchbook.client;
 import net.minecraft.client.gui.screens.Screen;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.PageSketch;
+import net.z2six.sketchbook.book.SketchSourceImage;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -20,7 +21,7 @@ public interface SketchBookScreenBridge {
 
     Optional<UUID> sketchbook$getSketchReference(int pageIndex);
 
-    void sketchbook$cacheSketch(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask);
+    void sketchbook$cacheSketch(UUID referenceId, PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask);
 
     void sketchbook$removeSketch(int pageIndex);
 

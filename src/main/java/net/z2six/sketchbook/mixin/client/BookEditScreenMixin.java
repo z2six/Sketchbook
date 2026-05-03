@@ -14,6 +14,7 @@ import net.z2six.sketchbook.book.PageSketch;
 import net.z2six.sketchbook.book.SceneMemorySummary;
 import net.z2six.sketchbook.book.SceneMemoryTitles;
 import net.z2six.sketchbook.book.SketchColorMask;
+import net.z2six.sketchbook.book.SketchSourceImage;
 import net.z2six.sketchbook.client.ClientSceneMemoryCache;
 import net.z2six.sketchbook.client.ClientSketchCache;
 import net.z2six.sketchbook.client.ClientSketchRequestManager;
@@ -21,6 +22,7 @@ import net.z2six.sketchbook.client.SketchBookScreenBridge;
 import net.z2six.sketchbook.client.SketchCaptureController;
 import net.z2six.sketchbook.client.SketchContextMenu;
 import net.z2six.sketchbook.client.SketchPageRenderer;
+import net.z2six.sketchbook.image.SketchImageProcessor;
 import net.z2six.sketchbook.network.BookSketchColorPayload;
 import net.z2six.sketchbook.network.BookSketchPayload;
 import net.z2six.sketchbook.network.RipSketchPagePayload;
@@ -55,6 +57,10 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     @Unique private int sketchbook$menuMouseX;
     @Unique private int sketchbook$menuMouseY;
     @Unique private int sketchbook$menuPageIndex = -1;
+    @Unique private int sketchbook$pendingColorPageIndex = -1;
+    @Unique private UUID sketchbook$pendingColorReferenceId;
+    @Unique private int sketchbook$pendingColorMask = SketchColorMask.NONE;
+    @Unique private PageSketch sketchbook$pendingColorPreview;
 
     protected BookEditScreenMixin(Component title) {
         super(title);
@@ -68,7 +74,10 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
 
         PageSketch sketch = BookSketches.getInlineSketch(this.book, this.currentPage);
         if (sketch == null) {
-            sketch = BookSketches.getSketchReference(this.book, this.currentPage).flatMap(ClientSketchCache::get).orElse(null);
+            sketch = this.sketchbook$getPendingPreview(this.currentPage);
+            if (sketch == null) {
+                sketch = BookSketches.getSketchReference(this.book, this.currentPage).flatMap(ClientSketchCache::get).orElse(null);
+            }
             if (sketch == null && BookSketches.hasSketch(this.book, this.currentPage)) {
                 ClientSketchRequestManager.request(this.sketchbook$getTarget(), this.currentPage);
             }
@@ -92,6 +101,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
                 }
                 return;
             }
+            this.sketchbook$commitPendingColorChange();
             this.sketchbook$contextMenu.clear();
         }
 
@@ -158,8 +168,8 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     }
 
     @Override
-    public void sketchbook$cacheSketch(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask) {
-        ClientSketchCache.put(referenceId, sketch, sourceAvailable, colorMask);
+    public void sketchbook$cacheSketch(UUID referenceId, PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask) {
+        ClientSketchCache.put(referenceId, sketch, sourceImage, colorMask);
     }
 
     @Override
@@ -193,11 +203,9 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
             boolean sourceAvailable = this.sketchbook$hasColorSource(pageIndex);
             return List.of(
                 SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.delete"), true, () -> {
-                    this.sketchbook$removeSketch(pageIndex);
                     PacketDistributor.sendToServer(BookSketchPayload.remove(this.sketchbook$getTarget(), pageIndex));
                 }),
                 SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.rip_page"), true, () -> {
-                    this.sketchbook$removeSketch(pageIndex);
                     PacketDistributor.sendToServer(new RipSketchPagePayload(this.sketchbook$getTarget(), pageIndex));
                 }),
                 SketchContextMenu.Entry.submenu(
@@ -222,7 +230,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     @Unique
     private List<SketchContextMenu.Entry> sketchbook$buildColorEntries(int pageIndex, boolean sourceAvailable) {
         int availableColorMask = SketchbookItems.getAvailableColoredPencilMask(this.minecraft.player);
-        int currentColorMask = this.sketchbook$getCurrentColorMask(pageIndex);
+        int currentColorMask = this.sketchbook$getDisplayedColorMask(pageIndex);
         boolean allSelected = availableColorMask != 0 && (currentColorMask & availableColorMask) == availableColorMask;
         List<SketchContextMenu.Entry> entries = new ArrayList<>();
         entries.add(this.sketchbook$allColorEntry(pageIndex, sourceAvailable, availableColorMask, allSelected));
@@ -273,16 +281,62 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
     }
 
     @Unique
+    private int sketchbook$getDisplayedColorMask(int pageIndex) {
+        if (this.sketchbook$pendingColorPageIndex == pageIndex) {
+            return this.sketchbook$pendingColorMask;
+        }
+        return this.sketchbook$getCurrentColorMask(pageIndex);
+    }
+
+    @Unique
     private void sketchbook$setColorMask(int pageIndex, int colorMask) {
-        Optional<UUID> referenceId = BookSketches.getSketchReference(this.book, pageIndex);
-        if (referenceId.isEmpty()) {
+        UUID referenceId = BookSketches.getSketchReference(this.book, pageIndex).orElse(null);
+        if (referenceId == null) {
+            return;
+        }
+
+        SketchSourceImage sourceImage = ClientSketchCache.getSourceImage(referenceId).orElse(null);
+        if (sourceImage == null) {
             return;
         }
 
         int normalizedColorMask = SketchColorMask.normalize(colorMask);
-        ClientSketchCache.updateColorMask(referenceId.get(), normalizedColorMask);
-        PacketDistributor.sendToServer(new BookSketchColorPayload(this.sketchbook$getTarget(), pageIndex, normalizedColorMask));
+        this.sketchbook$pendingColorPageIndex = pageIndex;
+        this.sketchbook$pendingColorReferenceId = referenceId;
+        this.sketchbook$pendingColorMask = normalizedColorMask;
+        this.sketchbook$pendingColorPreview = SketchImageProcessor.render(sourceImage.width(), sourceImage.height(), sourceImage.readArgb(), normalizedColorMask, SketchImageProcessor.SketchStyle.V1);
         this.sketchbook$contextMenu.refresh(this.sketchbook$buildContextEntries(pageIndex), this.font, this.width, this.height);
+    }
+
+    @Unique
+    private PageSketch sketchbook$getPendingPreview(int pageIndex) {
+        if (this.sketchbook$pendingColorPageIndex != pageIndex) {
+            return null;
+        }
+        return this.sketchbook$pendingColorPreview;
+    }
+
+    @Unique
+    private void sketchbook$commitPendingColorChange() {
+        if (this.sketchbook$pendingColorPageIndex < 0 || this.sketchbook$pendingColorReferenceId == null) {
+            this.sketchbook$clearPendingColorChange();
+            return;
+        }
+
+        Optional<UUID> liveReference = BookSketches.getSketchReference(this.book, this.sketchbook$pendingColorPageIndex);
+        int committedColorMask = liveReference.map(ClientSketchCache::getColorMask).orElse(SketchColorMask.NONE);
+        if (liveReference.filter(this.sketchbook$pendingColorReferenceId::equals).isPresent() && committedColorMask != this.sketchbook$pendingColorMask) {
+            PacketDistributor.sendToServer(new BookSketchColorPayload(this.sketchbook$getTarget(), this.sketchbook$pendingColorPageIndex, this.sketchbook$pendingColorMask));
+        }
+        this.sketchbook$clearPendingColorChange();
+    }
+
+    @Unique
+    private void sketchbook$clearPendingColorChange() {
+        this.sketchbook$pendingColorPageIndex = -1;
+        this.sketchbook$pendingColorReferenceId = null;
+        this.sketchbook$pendingColorMask = SketchColorMask.NONE;
+        this.sketchbook$pendingColorPreview = null;
     }
 
     @Unique

@@ -3,6 +3,7 @@ package net.z2six.sketchbook.book;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.compat.scholar.ScholarCommonCompat;
 import net.z2six.sketchbook.image.SketchImageProcessor;
 
@@ -26,22 +27,37 @@ public final class ServerBookSketches {
 
         Optional<UUID> referenceId = entry.referenceId();
         if (referenceId.isEmpty()) {
+            SketchbookLog.infoOnce(
+                "book-entry-missing-ref:" + player.serverLevel().dimension().location() + ":" + player.getUUID() + ":" + pageIndex,
+                "Sketchbook could not resolve sketch page {} for player {} in {} because the book entry had no reference id.",
+                pageIndex,
+                player.getGameProfile().getName(),
+                player.serverLevel().dimension().location()
+            );
             return Optional.empty();
         }
 
         SketchStorageSavedData storage = SketchStorageSavedData.get(player.getServer());
         Optional<StoredSketchData> stored = storage.getData(referenceId.get());
         if (stored.isPresent()) {
-            return Optional.of(new ResolvedSketch(referenceId.get(), stored.get().sketch(), stored.get().hasSourceImage(), stored.get().colorMask(), false));
+            return Optional.of(new ResolvedSketch(referenceId.get(), stored.get().sketch(), stored.get().sourceImage(), stored.get().colorMask(), false));
         }
 
         if (entry.inlineSketch().isPresent()) {
             PageSketch legacySketch = entry.inlineSketch().get();
             storage.put(referenceId.get(), StoredSketchData.legacy(legacySketch));
             migrateEntry(book, pageIndex, referenceId.get());
-            return Optional.of(new ResolvedSketch(referenceId.get(), legacySketch, false, SketchColorMask.NONE, true));
+            return Optional.of(new ResolvedSketch(referenceId.get(), legacySketch, Optional.empty(), SketchColorMask.NONE, true));
         }
 
+        SketchbookLog.infoOnce(
+            "missing-book-sketch-storage:" + referenceId.get(),
+            "Sketchbook could not resolve sketch ref {} for player {} page {} in {} because the stored sketch data was missing.",
+            referenceId.get(),
+            player.getGameProfile().getName(),
+            pageIndex,
+            player.serverLevel().dimension().location()
+        );
         return Optional.empty();
     }
 
@@ -80,7 +96,26 @@ public final class ServerBookSketches {
         UUID referenceId = entry.referenceId().get();
         SketchStorageSavedData storage = SketchStorageSavedData.get(player.getServer());
         StoredSketchData stored = storage.getData(referenceId).orElse(null);
-        if (stored == null || stored.sourceImage().isEmpty()) {
+        if (stored == null) {
+            SketchbookLog.infoOnce(
+                "missing-recolor-storage:" + referenceId,
+                "Sketchbook could not recolor sketch ref {} for player {} page {} in {} because the stored sketch data was missing.",
+                referenceId,
+                player.getGameProfile().getName(),
+                pageIndex,
+                player.serverLevel().dimension().location()
+            );
+            return Optional.empty();
+        }
+        if (stored.sourceImage().isEmpty()) {
+            SketchbookLog.infoOnce(
+                "missing-recolor-source:" + referenceId,
+                "Sketchbook could not recolor sketch ref {} for player {} page {} in {} because no source image was stored for that sketch.",
+                referenceId,
+                player.getGameProfile().getName(),
+                pageIndex,
+                player.serverLevel().dimension().location()
+            );
             return Optional.empty();
         }
 
@@ -88,13 +123,13 @@ public final class ServerBookSketches {
         int normalizedColorMask = SketchColorMask.normalize(colorMask);
         PageSketch recolored = SketchImageProcessor.render(sourceImage.width(), sourceImage.height(), sourceImage.readArgb(), normalizedColorMask, style);
         storage.put(referenceId, stored.withSketch(recolored, normalizedColorMask));
-        return Optional.of(new ResolvedSketch(referenceId, recolored, true, normalizedColorMask, false));
+        return Optional.of(new ResolvedSketch(referenceId, recolored, stored.sourceImage(), normalizedColorMask, false));
     }
 
     private static void migrateEntry(ItemStack book, int pageIndex, UUID referenceId) {
         BookSketches.applyReference(book, pageIndex, referenceId);
     }
 
-    public record ResolvedSketch(UUID referenceId, PageSketch sketch, boolean sourceAvailable, int colorMask, boolean migratedBook) {
+    public record ResolvedSketch(UUID referenceId, PageSketch sketch, Optional<SketchSourceImage> sourceImage, int colorMask, boolean migratedBook) {
     }
 }
