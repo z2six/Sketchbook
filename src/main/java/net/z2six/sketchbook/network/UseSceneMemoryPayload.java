@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.ServerSceneMemories;
 
@@ -35,6 +36,13 @@ public record UseSceneMemoryPayload(BookSketchTarget target, int pageIndex, UUID
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer serverPlayer) {
                 if (ServerSceneMemories.applyMemoryToBook(serverPlayer, payload.target(), payload.pageIndex(), payload.memoryId()).isEmpty()) {
+                    SketchbookLog.info(
+                        "Sketchbook rejected memory application {} for player {} page {} target {}.",
+                        payload.memoryId(),
+                        serverPlayer.getGameProfile().getName(),
+                        payload.pageIndex(),
+                        payload.target()
+                    );
                     PacketDistributor.sendToPlayer(serverPlayer, new SketchActionFeedbackPayload("message.sketchbook.memory_apply_failed"));
                 }
             }

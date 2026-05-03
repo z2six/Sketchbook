@@ -15,6 +15,10 @@ public final class SketchbookLog {
     private SketchbookLog() {
     }
 
+    public static void info(String message, Object... args) {
+        LOGGER.info(message, args);
+    }
+
     public static void infoOnce(String key, String message, Object... args) {
         if (INFO_ONCE_KEYS.size() > MAX_ONCE_KEYS) {
             INFO_ONCE_KEYS.clear();

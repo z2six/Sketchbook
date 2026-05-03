@@ -13,6 +13,7 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.SketchbookItems;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
@@ -44,12 +45,12 @@ public record BookSketchColorPayload(BookSketchTarget target, int pageIndex, int
             if (!payload.target().isLectern()) {
                 ItemStack book = serverPlayer.getItemInHand(payload.target().hand());
                 if (!book.is(Items.WRITABLE_BOOK)) {
-                    fail(serverPlayer, "message.sketchbook.color_failed_book_missing");
+                    fail(serverPlayer, payload, "message.sketchbook.color_failed_book_missing", "Sketchbook rejected recolor for player {} page {} target {} because no writable book was held.");
                     return;
                 }
 
                 if (BookSketches.getSketchReference(book, payload.pageIndex()).isEmpty()) {
-                    fail(serverPlayer, "message.sketchbook.color_failed_missing_sketch");
+                    fail(serverPlayer, payload, "message.sketchbook.color_failed_missing_sketch", "Sketchbook rejected recolor for player {} page {} target {} because the page had no sketch reference.");
                     return;
                 }
             }
@@ -58,7 +59,7 @@ public record BookSketchColorPayload(BookSketchTarget target, int pageIndex, int
 
             var resolved = ServerBookSketches.recolor(serverPlayer, payload.target(), payload.pageIndex(), appliedColorMask, SketchImageProcessor.SketchStyle.V1);
             if (resolved.isEmpty()) {
-                fail(serverPlayer, "message.sketchbook.color_failed_unavailable");
+                fail(serverPlayer, payload, "message.sketchbook.color_failed_unavailable", "Sketchbook rejected recolor for player {} page {} target {} because the stored sketch could not be recolored.");
                 return;
             }
 
@@ -78,11 +79,25 @@ public record BookSketchColorPayload(BookSketchTarget target, int pageIndex, int
                     serverPlayer.containerMenu.broadcastChanges();
                     PacketDistributor.sendToPlayer(serverPlayer, syncPayload);
                 }
+                SketchbookLog.info(
+                    "Sketchbook recolored sketch ref {} for player {} page {} target {} with color mask {}.",
+                    resolvedSketch.referenceId(),
+                    serverPlayer.getGameProfile().getName(),
+                    payload.pageIndex(),
+                    payload.target(),
+                    resolvedSketch.colorMask()
+                );
             });
         });
     }
 
-    private static void fail(ServerPlayer player, String translationKey) {
+    private static void fail(ServerPlayer player, BookSketchColorPayload payload, String translationKey, String logMessage) {
+        SketchbookLog.info(
+            logMessage,
+            player.getGameProfile().getName(),
+            payload.pageIndex(),
+            payload.target()
+        );
         PacketDistributor.sendToPlayer(player, new SketchActionFeedbackPayload(translationKey));
     }
 }

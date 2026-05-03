@@ -17,11 +17,27 @@ public final class ServerBookSketches {
     public static Optional<ResolvedSketch> resolve(ServerPlayer player, BookSketchTarget target, int pageIndex) {
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
         if (!book.is(Items.WRITABLE_BOOK)) {
+            SketchbookLog.infoOnce(
+                "resolve-missing-book:" + player.getUUID() + ":" + pageIndex + ":" + target,
+                "Sketchbook could not resolve sketch page {} for player {} target {} because no writable book was available.",
+                pageIndex,
+                player.getGameProfile().getName(),
+                target
+            );
             return Optional.empty();
         }
 
         SketchPageEntry entry = BookSketches.getEntry(book, pageIndex);
         if (entry == null) {
+            if (" ".equals(BookSketches.getPageText(book, pageIndex))) {
+                SketchbookLog.infoOnce(
+                    "marker-without-entry:" + player.getUUID() + ":" + pageIndex + ":" + target,
+                    "Sketchbook found a sketch marker without sketch entry for player {} page {} target {}.",
+                    player.getGameProfile().getName(),
+                    pageIndex,
+                    target
+                );
+            }
             return Optional.empty();
         }
 
@@ -64,17 +80,35 @@ public final class ServerBookSketches {
     public static UUID storeNewSketch(ServerPlayer player, CapturedSketch sketch) {
         UUID referenceId = UUID.randomUUID();
         SketchStorageSavedData.get(player.getServer()).put(referenceId, StoredSketchData.captured(sketch));
+        SketchbookLog.info(
+            "Sketchbook stored new sketch ref {} for player {} in {}.",
+            referenceId,
+            player.getGameProfile().getName(),
+            player.serverLevel().dimension().location()
+        );
         return referenceId;
     }
 
     public static Optional<UUID> ripOut(ServerPlayer player, BookSketchTarget target, int pageIndex) {
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
         if (!book.is(Items.WRITABLE_BOOK)) {
+            SketchbookLog.info(
+                "Sketchbook could not rip page {} for player {} target {} because no writable book was available.",
+                pageIndex,
+                player.getGameProfile().getName(),
+                target
+            );
             return Optional.empty();
         }
 
         ResolvedSketch resolved = resolve(player, target, pageIndex).orElse(null);
         if (resolved == null) {
+            SketchbookLog.info(
+                "Sketchbook could not rip page {} for player {} target {} because no sketch could be resolved.",
+                pageIndex,
+                player.getGameProfile().getName(),
+                target
+            );
             return Optional.empty();
         }
 
@@ -85,11 +119,26 @@ public final class ServerBookSketches {
     public static Optional<ResolvedSketch> recolor(ServerPlayer player, BookSketchTarget target, int pageIndex, int colorMask, SketchImageProcessor.SketchStyle style) {
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
         if (!book.is(Items.WRITABLE_BOOK)) {
+            SketchbookLog.info(
+                "Sketchbook could not recolor page {} for player {} target {} because no writable book was available.",
+                pageIndex,
+                player.getGameProfile().getName(),
+                target
+            );
             return Optional.empty();
         }
 
         SketchPageEntry entry = BookSketches.getEntry(book, pageIndex);
         if (entry == null || entry.referenceId().isEmpty()) {
+            if (" ".equals(BookSketches.getPageText(book, pageIndex))) {
+                SketchbookLog.infoOnce(
+                    "recolor-marker-without-ref:" + player.getUUID() + ":" + pageIndex + ":" + target,
+                    "Sketchbook could not recolor page {} for player {} target {} because the page had a marker but no sketch reference.",
+                    pageIndex,
+                    player.getGameProfile().getName(),
+                    target
+                );
+            }
             return Optional.empty();
         }
 

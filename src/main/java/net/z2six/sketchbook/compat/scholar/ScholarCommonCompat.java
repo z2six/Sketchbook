@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.entity.LecternBlockEntity;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.z2six.sketchbook.SketchbookItems;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.CapturedSketch;
@@ -25,12 +26,24 @@ public final class ScholarCommonCompat {
     public static boolean handleSketchUpdate(ServerPlayer serverPlayer, BookSketchTarget target, int pageIndex, Optional<CapturedSketch> sketch) {
         ItemStack book = getLecternBook(serverPlayer, target);
         if (!book.is(Items.WRITABLE_BOOK)) {
+            SketchbookLog.info(
+                "Sketchbook rejected lectern sketch mutation for player {} page {} target {} because no writable lectern book was available.",
+                serverPlayer.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
             return false;
         }
 
         if (sketch.isPresent()) {
             String pageText = BookSketches.getPageText(book, pageIndex);
             if (BookSketches.hasSketch(book, pageIndex) || !BookSketches.canSketchOnText(pageText)) {
+                SketchbookLog.info(
+                    "Sketchbook rejected lectern sketch placement for player {} page {} target {} because the page was not sketchable.",
+                    serverPlayer.getGameProfile().getName(),
+                    pageIndex,
+                    target
+                );
                 return false;
             }
             UUID referenceId = ServerBookSketches.storeNewSketch(serverPlayer, sketch.get());
@@ -40,9 +53,22 @@ public final class ScholarCommonCompat {
                 target,
                 new BookSketchSyncPayload(target, pageIndex, Optional.of(referenceId), Optional.of(sketch.get().sketch()), Optional.of(sketch.get().sourceImage()), 0)
             );
+            SketchbookLog.info(
+                "Sketchbook placed lectern sketch ref {} for player {} page {} target {}.",
+                referenceId,
+                serverPlayer.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
         } else {
             BookSketches.removeSketch(book, pageIndex);
             broadcastLecternUpdate(serverPlayer, target, BookSketchSyncPayload.remove(target, pageIndex));
+            SketchbookLog.info(
+                "Sketchbook removed lectern sketch for player {} page {} target {}.",
+                serverPlayer.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
         }
         return true;
     }

@@ -20,6 +20,12 @@ public final class ServerSceneMemories {
 
     public static void remember(ServerPlayer player, CapturedSketch capture) {
         SceneMemorySavedData.get(player.getServer()).addMemory(player.getUUID(), player.serverLevel().getGameTime(), capture);
+        SketchbookLog.info(
+            "Sketchbook stored scene memory for player {} in {} at game time {}.",
+            player.getGameProfile().getName(),
+            player.serverLevel().dimension().location(),
+            player.serverLevel().getGameTime()
+        );
         sync(player);
     }
 
@@ -30,6 +36,13 @@ public final class ServerSceneMemories {
 
     public static Optional<UUID> applyMemoryToBook(ServerPlayer player, BookSketchTarget target, int pageIndex, UUID memoryId) {
         if (!SketchbookItems.hasPencil(player)) {
+            SketchbookLog.info(
+                "Sketchbook rejected memory application {} for player {} page {} target {} because no required pencil was available.",
+                memoryId,
+                player.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
             return Optional.empty();
         }
 
@@ -47,11 +60,25 @@ public final class ServerSceneMemories {
 
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
         if (!book.is(Items.WRITABLE_BOOK)) {
+            SketchbookLog.info(
+                "Sketchbook rejected memory application {} for player {} page {} target {} because no writable book was available.",
+                memoryId,
+                player.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
             return Optional.empty();
         }
 
         String pageText = BookSketches.getPageText(book, pageIndex);
         if (BookSketches.hasSketch(book, pageIndex) || !BookSketches.canSketchOnText(pageText)) {
+            SketchbookLog.info(
+                "Sketchbook rejected memory application {} for player {} page {} target {} because the page was not sketchable.",
+                memoryId,
+                player.getGameProfile().getName(),
+                pageIndex,
+                target
+            );
             return Optional.empty();
         }
 
@@ -68,6 +95,14 @@ public final class ServerSceneMemories {
             player.containerMenu.broadcastChanges();
             PacketDistributor.sendToPlayer(player, payload);
         }
+        SketchbookLog.info(
+            "Sketchbook applied memory {} as sketch ref {} for player {} page {} target {}.",
+            memoryId,
+            referenceId,
+            player.getGameProfile().getName(),
+            pageIndex,
+            target
+        );
 
         return Optional.of(referenceId);
     }

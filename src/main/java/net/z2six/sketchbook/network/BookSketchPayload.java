@@ -14,6 +14,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.z2six.sketchbook.Sketchbook;
 import net.z2six.sketchbook.SketchbookItems;
+import net.z2six.sketchbook.SketchbookLog;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.CapturedSketch;
@@ -52,27 +53,27 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
             }
 
             if (payload.sketch().isPresent() && !SketchbookItems.hasPencil(serverPlayer)) {
-                fail(serverPlayer, "message.sketchbook.sketch_failed_no_pencil");
+                fail(serverPlayer, payload, "message.sketchbook.sketch_failed_no_pencil", "Sketchbook rejected sketch placement for player {} page {} target {} because no required pencil was available.");
                 return;
             }
 
             if (payload.target().isLectern()) {
                 if (!ScholarCommonCompat.handleSketchUpdate(serverPlayer, payload.target(), payload.pageIndex(), payload.sketch())) {
-                    fail(serverPlayer, payload.sketch().isPresent() ? "message.sketchbook.sketch_failed_page_unavailable" : "message.sketchbook.sketch_failed_book_missing");
+                    fail(serverPlayer, payload, payload.sketch().isPresent() ? "message.sketchbook.sketch_failed_page_unavailable" : "message.sketchbook.sketch_failed_book_missing", "Sketchbook rejected lectern sketch mutation for player {} page {} target {} because the lectern book or page state was unavailable.");
                 }
                 return;
             }
 
             ItemStack book = serverPlayer.getItemInHand(payload.target().hand());
             if (!book.is(Items.WRITABLE_BOOK)) {
-                fail(serverPlayer, "message.sketchbook.sketch_failed_book_missing");
+                fail(serverPlayer, payload, "message.sketchbook.sketch_failed_book_missing", "Sketchbook rejected sketch mutation for player {} page {} target {} because no writable book was held.");
                 return;
             }
 
             if (payload.sketch().isPresent()) {
                 String pageText = BookSketches.getPageText(book, payload.pageIndex());
                 if (BookSketches.hasSketch(book, payload.pageIndex()) || !BookSketches.canSketchOnText(pageText)) {
-                    fail(serverPlayer, "message.sketchbook.sketch_failed_page_unavailable");
+                    fail(serverPlayer, payload, "message.sketchbook.sketch_failed_page_unavailable", "Sketchbook rejected sketch placement for player {} page {} target {} because the page was not sketchable.");
                     return;
                 }
 
@@ -84,16 +85,35 @@ public record BookSketchPayload(BookSketchTarget target, int pageIndex, Optional
                     serverPlayer,
                     new BookSketchSyncPayload(payload.target(), payload.pageIndex(), Optional.of(referenceId), Optional.of(payload.sketch().get().sketch()), Optional.of(payload.sketch().get().sourceImage()), 0)
                 );
+                SketchbookLog.info(
+                    "Sketchbook placed sketch ref {} for player {} page {} target {}.",
+                    referenceId,
+                    serverPlayer.getGameProfile().getName(),
+                    payload.pageIndex(),
+                    payload.target()
+                );
             } else {
                 BookSketches.removeSketch(book, payload.pageIndex());
                 serverPlayer.inventoryMenu.broadcastChanges();
                 serverPlayer.containerMenu.broadcastChanges();
                 PacketDistributor.sendToPlayer(serverPlayer, BookSketchSyncPayload.remove(payload.target(), payload.pageIndex()));
+                SketchbookLog.info(
+                    "Sketchbook removed sketch for player {} page {} target {}.",
+                    serverPlayer.getGameProfile().getName(),
+                    payload.pageIndex(),
+                    payload.target()
+                );
             }
         });
     }
 
-    private static void fail(ServerPlayer player, String translationKey) {
+    private static void fail(ServerPlayer player, BookSketchPayload payload, String translationKey, String logMessage) {
+        SketchbookLog.info(
+            logMessage,
+            player.getGameProfile().getName(),
+            payload.pageIndex(),
+            payload.target()
+        );
         PacketDistributor.sendToPlayer(player, new SketchActionFeedbackPayload(translationKey));
     }
 }
