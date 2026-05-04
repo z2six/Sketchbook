@@ -2,16 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "L L",
-    "LPL",
-    "LLL"
+    " I ",
+    "ISI",
+    " I "
   ],
   "key": {
-    "L": {
-      "item": "minecraft:leather"
+    "I": {
+      "item": "minecraft:iron_nugget"
     },
-    "P": {
-      "item": "sketchbook:pencil"
+    "S": {
+      "item": "minecraft:string"
     }
   },
   "result": {
