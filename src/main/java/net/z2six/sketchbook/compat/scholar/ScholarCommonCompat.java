@@ -1,8 +1,8 @@
 package net.z2six.sketchbook.compat.scholar;
 
-import io.github.mortuusars.scholar.menu.LecternSpreadMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.LecternBlockEntity;
@@ -16,10 +16,14 @@ import net.z2six.sketchbook.book.CapturedSketch;
 import net.z2six.sketchbook.book.ServerBookSketches;
 import net.z2six.sketchbook.network.BookSketchSyncPayload;
 
+import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.UUID;
 
 public final class ScholarCommonCompat {
+    private static final String SCHOLAR_MODID = "scholar";
+    private static final String LECTERN_SPREAD_MENU_CLASS = "io.github.mortuusars.scholar.menu.LecternSpreadMenu";
+
     private ScholarCommonCompat() {
     }
 
@@ -74,16 +78,16 @@ public final class ScholarCommonCompat {
     }
 
     public static ItemStack getLecternBook(ServerPlayer serverPlayer, BookSketchTarget target) {
-        if (!ModList.get().isLoaded("scholar") || target.lecternPos().isEmpty()) {
+        if (!ModList.get().isLoaded(SCHOLAR_MODID) || target.lecternPos().isEmpty()) {
             return ItemStack.EMPTY;
         }
 
-        if (!(serverPlayer.containerMenu instanceof LecternSpreadMenu menu)) {
+        if (!isLecternSpreadMenu(serverPlayer.containerMenu)) {
             return ItemStack.EMPTY;
         }
 
         BlockPos lecternPos = target.lecternPos().get();
-        if (!lecternPos.equals(menu.getLecternPos())) {
+        if (!lecternPos.equals(getLecternPos(serverPlayer.containerMenu).orElse(null))) {
             return ItemStack.EMPTY;
         }
 
@@ -101,10 +105,29 @@ public final class ScholarCommonCompat {
         }
         serverPlayer.containerMenu.broadcastChanges();
         for (ServerPlayer otherPlayer : serverPlayer.serverLevel().players()) {
-            if (otherPlayer.containerMenu instanceof LecternSpreadMenu otherMenu && lecternPos.equals(otherMenu.getLecternPos())) {
+            if (isLecternSpreadMenu(otherPlayer.containerMenu) && lecternPos.equals(getLecternPos(otherPlayer.containerMenu).orElse(null))) {
                 otherPlayer.containerMenu.broadcastChanges();
                 PacketDistributor.sendToPlayer(otherPlayer, syncPayload);
             }
+        }
+    }
+
+    private static boolean isLecternSpreadMenu(AbstractContainerMenu menu) {
+        try {
+            return Class.forName(LECTERN_SPREAD_MENU_CLASS).isInstance(menu);
+        } catch (ClassNotFoundException ignored) {
+            return false;
+        }
+    }
+
+    private static Optional<BlockPos> getLecternPos(AbstractContainerMenu menu) {
+        try {
+            Method method = menu.getClass().getMethod("getLecternPos");
+            Object value = method.invoke(menu);
+            return value instanceof BlockPos pos ? Optional.of(pos) : Optional.empty();
+        } catch (ReflectiveOperationException e) {
+            SketchbookLog.infoOnce("scholar_lectern_pos_reflection_failed", "Sketchbook could not read Scholar lectern menu position: {}", e.toString());
+            return Optional.empty();
         }
     }
 }

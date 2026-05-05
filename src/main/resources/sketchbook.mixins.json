@@ -5,6 +5,8 @@
   "plugin": "net.z2six.sketchbook.mixin.SketchbookMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ItemStackMixin",
+    "ServerGamePacketListenerImplMixin"
   ],
   "client": [
     "client.ContainerEventHandlerMixin",

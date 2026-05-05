@@ -53,6 +53,10 @@ public class Sketchbook {
         "torn_sketch_reference",
         builder -> builder.persistent(UUIDUtil.STRING_CODEC).networkSynchronized(ByteBufCodecs.STRING_UTF8.map(UUID::fromString, UUID::toString)).cacheEncoding()
     );
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<String>> SIGNED_DATE = DATA_COMPONENTS.registerComponentType(
+        "signed_date",
+        builder -> builder.persistent(Codec.STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8).cacheEncoding()
+    );
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> SKETCHBOOK_TAB = CREATIVE_MODE_TABS.register(
         "sketchbook",
         () -> CreativeModeTab.builder()

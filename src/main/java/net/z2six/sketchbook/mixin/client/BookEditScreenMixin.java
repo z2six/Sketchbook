@@ -13,6 +13,7 @@ import net.z2six.sketchbook.book.BookSketches;
 import net.z2six.sketchbook.book.PageSketch;
 import net.z2six.sketchbook.book.SceneMemorySummary;
 import net.z2six.sketchbook.book.SceneMemoryTitles;
+import net.z2six.sketchbook.book.SignedBookDates;
 import net.z2six.sketchbook.book.SketchColorMask;
 import net.z2six.sketchbook.book.SketchSourceImage;
 import net.z2six.sketchbook.client.ClientSceneMemoryCache;
@@ -110,7 +111,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
         }
 
         boolean hasSketch = this.sketchbook$hasSketch(this.currentPage);
-        if (!hasSketch && !SketchbookItems.hasPencil(this.minecraft.player)) {
+        if (!hasSketch && !SketchbookItems.hasPencil(this.minecraft.player) && this.sketchbook$getCurrentDate().isEmpty()) {
             return;
         }
 
@@ -199,6 +200,7 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
 
     @Unique
     private List<SketchContextMenu.Entry> sketchbook$buildContextEntries(int pageIndex) {
+        Optional<String> currentDate = this.sketchbook$getCurrentDate();
         if (this.sketchbook$hasSketch(pageIndex)) {
             boolean sourceAvailable = this.sketchbook$hasColorSource(pageIndex);
             return List.of(
@@ -212,7 +214,8 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
                     Component.translatable("menu.sketchbook.color"),
                     sourceAvailable,
                     this.sketchbook$buildColorEntries(pageIndex, sourceAvailable)
-                )
+                ),
+                SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.add_date"), false, () -> { })
             );
         }
 
@@ -221,10 +224,55 @@ public abstract class BookEditScreenMixin extends Screen implements SketchBookSc
             ? Component.translatable("button.sketchbook.sketch")
             : Component.translatable("menu.sketchbook.sketch_page_must_be_empty");
         List<SceneMemorySummary> memories = ClientSceneMemoryCache.getMemories();
+        Optional<String> insertableDate = currentDate.filter(date -> this.sketchbook$canInsertDate(pageIndex, date));
         return List.of(
+            SketchContextMenu.Entry.action(Component.translatable("button.sketchbook.add_date"), insertableDate.isPresent(), () -> insertableDate.ifPresent(date -> this.sketchbook$insertDate(pageIndex, date))),
             SketchContextMenu.Entry.action(label, canCapture, () -> SketchCaptureController.requestCapture(this, pageIndex)),
             SketchContextMenu.Entry.submenu(Component.translatable("menu.sketchbook.memories"), !memories.isEmpty() && this.sketchbook$canCaptureSketch(pageIndex), this.sketchbook$buildMemoryEntries(pageIndex, memories))
         );
+    }
+
+    @Unique
+    private Optional<String> sketchbook$getCurrentDate() {
+        if (this.minecraft == null || this.minecraft.level == null) {
+            return Optional.empty();
+        }
+        return SignedBookDates.currentDateString(this.minecraft.level.getDayTime());
+    }
+
+    @Unique
+    private boolean sketchbook$canInsertDate(int pageIndex, String date) {
+        return !this.sketchbook$hasSketch(pageIndex) && this.sketchbook$isValidPageText(this.sketchbook$dateInsertedText(pageIndex, date));
+    }
+
+    @Unique
+    private void sketchbook$insertDate(int pageIndex, String date) {
+        if (!this.sketchbook$canInsertDate(pageIndex, date)) {
+            return;
+        }
+
+        this.sketchbook$ensurePageCapacity(pageIndex);
+        this.pages.set(pageIndex, this.sketchbook$dateInsertedText(pageIndex, date));
+        this.isModified = true;
+        this.clearDisplayCache();
+    }
+
+    @Unique
+    private String sketchbook$dateInsertedText(int pageIndex, String date) {
+        String currentText = pageIndex >= 0 && pageIndex < this.pages.size() ? this.pages.get(pageIndex) : "";
+        return currentText.isBlank() ? date : currentText + "\n" + date;
+    }
+
+    @Unique
+    private boolean sketchbook$isValidPageText(String text) {
+        return text.length() < 1024 && this.font.wordWrapHeight(text, 114) <= 128;
+    }
+
+    @Unique
+    private void sketchbook$ensurePageCapacity(int targetPageIndex) {
+        while (this.pages.size() <= targetPageIndex && this.pages.size() < 100) {
+            this.pages.add("");
+        }
     }
 
     @Unique
