@@ -228,7 +228,11 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
     @Unique
     private void sketchbook$setTextBoxBoolean(Object textBox, String fieldName, boolean value) {
         try {
-            Field field = textBox.getClass().getField(fieldName);
+            Field field = this.sketchbook$getField(textBox.getClass(), fieldName);
+            if (field == null) {
+                return;
+            }
+            field.setAccessible(true);
             field.setBoolean(textBox, value);
         } catch (ReflectiveOperationException ignored) {
         }
@@ -237,12 +241,28 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
     @Unique
     private Object sketchbook$getScholarField(String fieldName) {
         try {
-            Field field = this.getClass().getDeclaredField(fieldName);
+            Field field = this.sketchbook$getField(this.getClass(), fieldName);
+            if (field == null) {
+                return null;
+            }
             field.setAccessible(true);
             return field.get(this);
         } catch (ReflectiveOperationException ignored) {
             return null;
         }
+    }
+
+    @Unique
+    private Field sketchbook$getField(Class<?> owner, String fieldName) {
+        Class<?> current = owner;
+        while (current != null) {
+            try {
+                return current.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
     }
 
     @Unique

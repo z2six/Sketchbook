@@ -1,10 +1,11 @@
 package net.z2six.sketchbook.mixin.client.scholar;
 
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.MenuAccess;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.z2six.sketchbook.book.BookSketchTarget;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 
 import java.lang.reflect.Method;
 
@@ -14,12 +15,11 @@ public abstract class LecternSpreadBookEditScreenMixin extends Screen {
         super(title);
     }
 
-    @Shadow public abstract Object getMenu();
-
     public BookSketchTarget sketchbook$getTarget() {
         try {
-            Method method = this.getMenu().getClass().getMethod("getLecternPos");
-            Object value = method.invoke(this.getMenu());
+            AbstractContainerMenu menu = ((MenuAccess<?>) (Object) this).getMenu();
+            Method method = menu.getClass().getMethod("getLecternPos");
+            Object value = method.invoke(menu);
             if (value instanceof net.minecraft.core.BlockPos pos) {
                 return BookSketchTarget.lectern(pos);
             }
