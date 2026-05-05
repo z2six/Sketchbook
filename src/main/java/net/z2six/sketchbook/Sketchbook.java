@@ -14,11 +14,14 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.InterModEnqueueEvent;
 import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.z2six.sketchbook.book.SketchBookData;
+import net.z2six.sketchbook.command.SketchbookCommands;
 import net.z2six.sketchbook.compat.curios.CuriosCompat;
 import net.z2six.sketchbook.network.BookSketchPayload;
 import net.z2six.sketchbook.network.BookSketchColorPayload;
@@ -75,6 +78,7 @@ public class Sketchbook {
         modEventBus.addListener(this::enqueueImc);
         modEventBus.addListener(SketchbookConfig::onLoad);
         modEventBus.addListener(SketchbookConfig::onReload);
+        NeoForge.EVENT_BUS.addListener(this::registerCommands);
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
@@ -95,5 +99,9 @@ public class Sketchbook {
 
     private void enqueueImc(InterModEnqueueEvent event) {
         CuriosCompat.enqueueImc();
+    }
+
+    private void registerCommands(RegisterCommandsEvent event) {
+        SketchbookCommands.register(event.getDispatcher());
     }
 }

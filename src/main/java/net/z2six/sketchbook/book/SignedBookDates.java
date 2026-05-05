@@ -52,18 +52,35 @@ public final class SignedBookDates {
     }
 
     public static void stampSignedDate(ItemStack stack, ServerPlayer player) {
-        if (!stack.is(Items.WRITTEN_BOOK)) {
+        if (!canHaveSignedDate(stack)) {
             return;
         }
 
         currentDateString(player).ifPresent(date -> {
-            stack.set(Sketchbook.SIGNED_DATE, date);
+            setSignedDate(stack, date);
             SketchbookLog.infoOnce("signed_book_date_stamped", "Sketchbook stamped signed-book date '{}'.", date);
         });
     }
 
+    public static boolean canHaveSignedDate(ItemStack stack) {
+        return stack.is(Items.WRITTEN_BOOK);
+    }
+
+    public static void setSignedDate(ItemStack stack, String date) {
+        if (!canHaveSignedDate(stack)) {
+            return;
+        }
+
+        String normalizedDate = date.strip();
+        if (normalizedDate.isEmpty()) {
+            return;
+        }
+
+        stack.set(Sketchbook.SIGNED_DATE, normalizedDate);
+    }
+
     public static Optional<String> getSignedDate(ItemStack stack) {
-        if (!stack.is(Items.WRITTEN_BOOK)) {
+        if (!canHaveSignedDate(stack)) {
             return Optional.empty();
         }
 
