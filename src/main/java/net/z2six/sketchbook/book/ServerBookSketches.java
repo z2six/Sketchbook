@@ -16,10 +16,10 @@ public final class ServerBookSketches {
 
     public static Optional<ResolvedSketch> resolve(ServerPlayer player, BookSketchTarget target, int pageIndex) {
         ItemStack book = target.isLectern() ? ScholarCommonCompat.getLecternBook(player, target) : player.getItemInHand(target.hand());
-        if (!book.is(Items.WRITABLE_BOOK)) {
+        if (!isResolvableBook(book)) {
             SketchbookLog.infoOnce(
                 "resolve-missing-book:" + player.getUUID() + ":" + pageIndex + ":" + target,
-                "Sketchbook could not resolve sketch page {} for player {} target {} because no writable book was available.",
+                "Sketchbook could not resolve sketch page {} for player {} target {} because no sketchable book was available.",
                 pageIndex,
                 player.getGameProfile().getName(),
                 target
@@ -62,8 +62,11 @@ public final class ServerBookSketches {
         if (entry.inlineSketch().isPresent()) {
             PageSketch legacySketch = entry.inlineSketch().get();
             storage.put(referenceId.get(), StoredSketchData.legacy(legacySketch));
-            migrateEntry(book, pageIndex, referenceId.get());
-            return Optional.of(new ResolvedSketch(referenceId.get(), legacySketch, Optional.empty(), SketchColorMask.NONE, true));
+            if (book.is(Items.WRITABLE_BOOK)) {
+                migrateEntry(book, pageIndex, referenceId.get());
+                return Optional.of(new ResolvedSketch(referenceId.get(), legacySketch, Optional.empty(), SketchColorMask.NONE, true));
+            }
+            return Optional.of(new ResolvedSketch(referenceId.get(), legacySketch, Optional.empty(), SketchColorMask.NONE, false));
         }
 
         SketchbookLog.infoOnce(
@@ -75,6 +78,10 @@ public final class ServerBookSketches {
             player.serverLevel().dimension().location()
         );
         return Optional.empty();
+    }
+
+    private static boolean isResolvableBook(ItemStack book) {
+        return book.is(Items.WRITABLE_BOOK) || book.is(Items.WRITTEN_BOOK);
     }
 
     public static UUID storeNewSketch(ServerPlayer player, CapturedSketch sketch) {

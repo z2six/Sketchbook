@@ -22,6 +22,10 @@ public final class BookSketches {
         return data == null ? null : data.get(pageIndex);
     }
 
+    public static boolean isBookWithSketches(ItemStack book) {
+        return book.has(Sketchbook.BOOK_SKETCHES);
+    }
+
     public static PageSketch getInlineSketch(ItemStack book, int pageIndex) {
         SketchPageEntry entry = getEntry(book, pageIndex);
         return entry == null ? null : entry.inlineSketch().orElse(null);
