@@ -1,7 +1,5 @@
 package net.z2six.sketchbook.mixin.client.scholar;
 
-import io.github.mortuusars.scholar.client.gui.screen.edit.SpreadBookEditScreen;
-import io.github.mortuusars.scholar.client.gui.widget.textbox.TextBox;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -40,18 +38,17 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.ArrayList;
 
-@Mixin(value = SpreadBookEditScreen.class, remap = false)
+@Mixin(targets = "io.github.mortuusars.scholar.client.gui.screen.edit.SpreadBookEditScreen", remap = false)
 public abstract class SpreadBookEditScreenMixin extends Screen implements SketchBookScreenBridge {
     @Shadow @Final protected ItemStack bookStack;
     @Shadow @Final protected InteractionHand hand;
     @Shadow @Final protected List<String> pages;
-    @Shadow protected TextBox leftPageTextBox;
-    @Shadow protected TextBox rightPageTextBox;
     @Shadow protected boolean bookModified;
 
     @Shadow protected abstract void updateButtonVisibility();
@@ -213,19 +210,39 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Unique
     private void sketchbook$updateSketchUi() {
-        this.sketchbook$updateTextBox(this.leftPageTextBox, this.sketchbook$getLeftPageIndex());
-        this.sketchbook$updateTextBox(this.rightPageTextBox, this.sketchbook$getRightPageIndex());
+        this.sketchbook$updateTextBox(this.sketchbook$getScholarField("leftPageTextBox"), this.sketchbook$getLeftPageIndex());
+        this.sketchbook$updateTextBox(this.sketchbook$getScholarField("rightPageTextBox"), this.sketchbook$getRightPageIndex());
     }
 
     @Unique
-    private void sketchbook$updateTextBox(TextBox textBox, int pageIndex) {
+    private void sketchbook$updateTextBox(Object textBox, int pageIndex) {
         if (textBox == null) {
             return;
         }
 
         boolean visible = !this.sketchbook$hasSketch(pageIndex);
-        textBox.visible = visible;
-        textBox.active = visible;
+        this.sketchbook$setTextBoxBoolean(textBox, "visible", visible);
+        this.sketchbook$setTextBoxBoolean(textBox, "active", visible);
+    }
+
+    @Unique
+    private void sketchbook$setTextBoxBoolean(Object textBox, String fieldName, boolean value) {
+        try {
+            Field field = textBox.getClass().getField(fieldName);
+            field.setBoolean(textBox, value);
+        } catch (ReflectiveOperationException ignored) {
+        }
+    }
+
+    @Unique
+    private Object sketchbook$getScholarField(String fieldName) {
+        try {
+            Field field = this.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return field.get(this);
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
     }
 
     @Unique
