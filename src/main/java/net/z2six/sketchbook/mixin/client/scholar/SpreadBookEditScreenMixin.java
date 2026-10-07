@@ -70,11 +70,10 @@ import java.util.Map;
 @Mixin(targets = "io.github.mortuusars.scholar.client.gui.screen.edit.SpreadBookEditScreen", remap = false)
 public abstract class SpreadBookEditScreenMixin extends Screen implements SketchBookScreenBridge {
     @Shadow @Final protected ItemStack bookStack;
-    @Shadow @Final protected InteractionHand hand;
     @Shadow @Final protected List<String> pages;
     @Shadow protected boolean bookModified;
 
-    @Shadow protected abstract void updateButtonVisibility();
+    @Shadow protected abstract void updateButtons();
     @Shadow protected abstract void setTextBoxes();
 
     @Unique private final SketchContextMenu sketchbook$contextMenu = new SketchContextMenu();
@@ -117,8 +116,8 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         this.sketchbook$updateSketchUi();
     }
 
-    @Inject(method = "updateButtonVisibility", at = @At("TAIL"))
-    private void sketchbook$updateButtonVisibility(CallbackInfo ci) {
+    @Inject(method = "updateButtons", at = @At("TAIL"))
+    private void sketchbook$updateButtons(CallbackInfo ci) {
         this.sketchbook$updateSketchUi();
     }
 
@@ -337,7 +336,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
 
     @Override
     public BookSketchTarget sketchbook$getTarget() {
-        return BookSketchTarget.hand(this.hand);
+        return BookSketchTarget.hand(InteractionHand.MAIN_HAND);
     }
 
     @Override
@@ -356,7 +355,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         BookSketches.applyLegacySketch(this.bookStack, this.pages, pageIndex, sketch);
         this.bookModified = true;
         this.setTextBoxes();
-        this.updateButtonVisibility();
+        this.updateButtons();
         this.sketchbook$updateSketchUi();
     }
 
@@ -365,7 +364,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         BookSketches.applyReference(this.bookStack, this.pages, pageIndex, referenceId);
         this.bookModified = true;
         this.setTextBoxes();
-        this.updateButtonVisibility();
+        this.updateButtons();
         this.sketchbook$updateSketchUi();
     }
 
@@ -379,7 +378,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         this.bookModified = true;
         if (!hadSketch) {
             this.setTextBoxes();
-            this.updateButtonVisibility();
+            this.updateButtons();
             this.sketchbook$updateSketchUi();
         }
     }
@@ -394,7 +393,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         this.bookModified = true;
         if (!hadSketch) {
             this.setTextBoxes();
-            this.updateButtonVisibility();
+            this.updateButtons();
             this.sketchbook$updateSketchUi();
         }
     }
@@ -420,7 +419,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         BookSketches.removeSketch(this.bookStack, this.pages, pageIndex);
         this.bookModified = true;
         this.setTextBoxes();
-        this.updateButtonVisibility();
+        this.updateButtons();
         this.sketchbook$updateSketchUi();
     }
 
@@ -790,7 +789,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         this.pages.set(pageIndex, editedText);
         this.bookModified = true;
         this.setTextBoxes();
-        this.updateButtonVisibility();
+        this.updateButtons();
         this.sketchbook$updateSketchUi();
 
         BookItemLinks updatedLinks = itemLinks.withEdit(pageIndex, expandedStart, expandedEnd, 0);
@@ -859,7 +858,7 @@ public abstract class SpreadBookEditScreenMixin extends Screen implements Sketch
         this.pages.set(pageIndex, this.sketchbook$dateInsertedText(pageIndex, date));
         this.bookModified = true;
         this.setTextBoxes();
-        this.updateButtonVisibility();
+        this.updateButtons();
         this.sketchbook$updateSketchUi();
     }
 

@@ -15,7 +15,8 @@
     "client.scholar.SpreadBookScreenAccessor",
     "client.scholar.SpreadBookEditScreenMixin",
     "client.scholar.SpreadBookViewScreenMixin",
-    "client.scholar.LecternSpreadBookEditScreenMixin"
+    "client.scholar.LecternSpreadBookEditScreenMixin",
+    "client.scholar.InHandSpreadBookEditScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
