@@ -24,7 +24,7 @@ public final class SketchbookMixinPlugin implements IMixinConfigPlugin {
         }
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        return classLoader.getResource("io/github/mortuusars/scholar/client/gui/screen/edit/SpreadBookEditScreen.class") != null;
+        return classLoader.getResource("io/github/mortuusars/scholar/client/gui/screen/edit/InHandSpreadBookEditScreen.class") != null;
     }
 
     @Override
